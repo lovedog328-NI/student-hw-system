@@ -24,29 +24,27 @@ STUDENT_LIST = [
 ]
 
 # --- 3. 跨裝置同步核心 ---
-# 使用 cache_resource 讓所有裝置共用同一個變數
 @st.cache_resource
 def get_global_data():
-    # 初始化一個空的 DataFrame
     return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 
-# 將全域資料放入 session_state 方便操作
 if 'global_df' not in st.session_state:
     st.session_state.global_df = get_global_data()
 
-# 簡化變數名稱
-df = st.session_state.global_df
-
+# --- 4. 介面開始 ---
 st.title("📚 學生作業快速登記系統")
-menu = st.sidebar.selectbox("功能選單", ["學生查詢中心", "老師管理後台"])
 
-# --- 學生查詢中心 ---
+# 側邊欄
+st.sidebar.header("控制面板")
+menu = st.sidebar.selectbox("切換功能", ["學生查詢中心", "老師管理後台"])
+
+# --- 學生查詢中心介面 ---
 if menu == "學生查詢中心":
     st.header("🔍 學生個人查詢")
     search_id = st.text_input("輸入座號查詢 (1-22)：")
     if search_id:
-        # 確保比對時型態一致
-        result = st.session_state.global_df[st.session_state.global_df["座號"].astype(str) == str(search_id)]
+        current_df = st.session_state.global_df
+        result = current_df[current_df["座號"].astype(str) == str(search_id)]
         if not result.empty:
             st.success(f"你好，{result.iloc[0]['姓名']} 同學")
             show_all = st.checkbox("顯示所有紀錄", value=False)
@@ -59,10 +57,81 @@ if menu == "學生查詢中心":
         else:
             st.info("目前尚無你的繳交紀錄。")
 
-# --- 老師管理後台 ---
+# --- 老師管理後台介面 ---
 elif menu == "老師管理後台":
     st.header("👨‍🏫 老師管理區")
-    pwd_input = st.sidebar.text_input("管理員密碼", type="password")
+    # 將密碼框放在主畫面明顯處，確保老師能看到
+    pwd_input = st.text_input("請輸入管理員密碼以開啟功能", type="password")
     
     if pwd_input == ADMIN_PASSWORD:
-        st.success("身分驗證成功")
+        st.success("身分驗證成功，功能已解鎖！")
+        st.divider()
+
+        # A. 快速補交/訂正按鈕
+        with st.expander("🎯 學生補交/訂正快速按鈕", expanded=True):
+            check_sid = st.text_input("輸入要更正的學生座號：", key="quick_check")
+            if check_sid:
+                # 取得最新資料
+                master_df = st.session_state.global_df
+                s_todo = master_df[(master_df["座號"].astype(str) == str(check_sid)) & (master_df["繳交狀態"] != "已繳交")]
+                if not s_todo.empty:
+                    st.write(f"學生：**{s_todo.iloc[0]['姓名']}**")
+                    for idx, row in s_todo.iterrows():
+                        col_text, col_btn = st.columns([3, 1])
+                        col_text.write(f"📌 {row['作業名稱']} ({row['繳交狀態']})")
+                        if col_btn.button(f"✅ 設為已完成", key=f"fix_{idx}"):
+                            st.session_state.global_df.at[idx, "繳交狀態"] = "已繳交"
+                            st.session_state.global_df.at[idx, "更新日期"] = str(date.today())
+                            st.rerun()
+                else:
+                    st.info("該生目前無欠交或需訂正作業。")
+
+        # B. 新增整班作業
+        with st.expander("📝 新增整班作業登記", expanded=False):
+            hw_name = st.text_input("輸入新作業名稱 (例如: 國語 L1)")
+            if hw_name:
+                if 'temp_status' not in st.session_state or st.session_state.get('last_hw_name') != hw_name:
+                    st.session_state.temp_status = {s['座號']: "已繳交" for s in STUDENT_LIST}
+                    st.session_state.last_hw_name = hw_name
+                
+                st.write("點選切換狀態：")
+                cols = st.columns(2)
+                for i, s in enumerate(STUDENT_LIST):
+                    sid = s['座號']
+                    curr = st.session_state.temp_status[sid]
+                    if cols[i%2].button(f"{sid}. {s['姓名']} ({curr})", key=f"bt_{sid}", use_container_width=True):
+                        if curr == "已繳交": st.session_state.temp_status[sid] = "未繳交"
+                        elif curr == "未繳交": st.session_state.temp_status[sid] = "需訂正"
+                        else: st.session_state.temp_status[sid] = "已繳交"
+                        st.rerun()
+
+                if st.button("💾 儲存並發布給全班", type="primary"):
+                    new_records = []
+                    for s in STUDENT_LIST:
+                        new_records.append({
+                            "座號": s['座號'], "姓名": s['姓名'], 
+                            "作業名稱": hw_name, "繳交狀態": st.session_state.temp_status[s['座號']], 
+                            "更新日期": str(date.today())
+                        })
+                    st.session_state.global_df = pd.concat([st.session_state.global_df, pd.DataFrame(new_records)], ignore_index=True)
+                    st.success("同步成功！")
+                    st.rerun()
+
+        # C. 歷史總表與下載
+        with st.expander("📊 歷史紀錄與備份"):
+            if not st.session_state.global_df.empty:
+                st.data_editor(st.session_state.global_df, use_container_width=True)
+                towrite = io.BytesIO()
+                st.session_state.global_df.to_excel(towrite, index=False, engine='openpyxl')
+                st.download_button("📥 下載 Excel 備份", data=towrite.getvalue(), file_name="作業紀錄備份.xlsx")
+                
+                if st.button("⚠️ 清空所有資料庫"):
+                    st.session_state.global_df = pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+                    st.rerun()
+            else:
+                st.info("目前尚無紀錄。")
+    
+    elif pwd_input == "":
+        st.info("請輸入密碼以顯示老師管理功能。")
+    else:
+        st.error("密碼錯誤，請重新輸入。")
