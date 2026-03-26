@@ -52,86 +52,94 @@ if menu == "學生查詢中心":
                 st.balloons()
                 st.info("✨ 目前沒有待處理作業，太棒了！")
             else:
-                st.table(display_df[["作業名稱", "繳交狀態", "更新日期"]])
+                st.table(display_df[["作業名稱", "繳交狀態", "更新日期"]].sort_values(by="更新日期", ascending=False))
         else:
             st.info("目前尚無你的繳交紀錄。")
 
 # --- 老師管理後台 ---
 elif menu == "老師管理後台":
     st.header("👨‍🏫 老師管理區")
-    pwd_input = st.text_input("請輸入管理員密碼以開啟功能", type="password")
+    pwd_input = st.text_input("請輸入管理員密碼", type="password")
     
     if pwd_input == ADMIN_PASSWORD:
-        st.success("身分驗證成功，功能已解鎖！")
+        st.success("身分驗證成功")
         st.divider()
 
-        # A. 快速補交/訂正按鈕 (新增更明顯的 Toast 提示)
+        # A. 快速補交/訂正 (一鍵完成)
         with st.expander("🎯 學生補交/訂正快速按鈕", expanded=True):
-            check_sid = st.text_input("輸入座號：", key="quick_check")
+            check_sid = st.text_input("輸入座號快速補交：", key="quick_check")
             if check_sid:
                 master_df = st.session_state.global_df
                 s_todo = master_df[(master_df["座號"].astype(str) == str(check_sid)) & (master_df["繳交狀態"] != "已繳交")]
                 if not s_todo.empty:
-                    st.write(f"學生：**{s_todo.iloc[0]['姓名']}**")
+                    st.write(f"學生：**{s_todo.iloc[0]['姓名']}** 的待辦")
                     for idx, row in s_todo.iterrows():
-                        col_text, col_btn = st.columns([3, 1])
-                        col_text.write(f"📌 {row['作業名稱']} ({row['繳交狀態']})")
-                        if col_btn.button(f"✅ 設為已完成", key=f"fix_{idx}"):
+                        col_t, col_b = st.columns([3, 1])
+                        col_t.write(f"📌 {row['作業名稱']} ({row['繳交狀態']})")
+                        if col_b.button(f"✅ 已完成", key=f"fix_{idx}"):
                             st.session_state.global_df.at[idx, "繳交狀態"] = "已繳交"
                             st.session_state.global_df.at[idx, "更新日期"] = str(date.today())
-                            st.toast(f"🎉 成功！{s_todo.iloc[0]['姓名']} 的 {row['作業名稱']} 已更新為已繳交！")
+                            st.toast("更新成功！")
                             st.rerun()
                 else:
-                    st.info("該生目前無欠交作業。")
+                    st.info("該生目前無欠交紀錄。")
 
-        # B. 新增整班作業 (新增成功後的 Balloons 效果)
+        # B. 單獨紀錄修正與刪除 (這是你要求的新功能)
+        with st.expander("✏️ 單項紀錄修正與刪除", expanded=False):
+            edit_sid = st.text_input("輸入座號以管理該生所有紀錄：", key="edit_sid")
+            if edit_sid:
+                # 篩選該生的所有資料
+                student_all = st.session_state.global_df[st.session_state.global_df["座號"].astype(str) == str(edit_sid)]
+                if not student_all.empty:
+                    st.write(f"管理學生：**{student_all.iloc[0]['姓名']}** 的所有歷史作業")
+                    st.info("💡 提示：可以直接在表格改狀態，或勾選左側後按鍵盤 Delete 刪除該筆。")
+                    
+                    # 讓老師編輯該生的局部資料
+                    edited_student_df = st.data_editor(
+                        student_all,
+                        column_config={
+                            "繳交狀態": st.column_config.SelectboxColumn("狀態", options=["已繳交", "未繳交", "需訂正"]),
+                            "座號": None, "姓名": None # 隱藏不需要改的
+                        },
+                        num_rows="dynamic",
+                        key="student_editor",
+                        use_container_width=True
+                    )
+                    
+                    if st.button("💾 確認修正該生資料"):
+                        # 先刪除舊的該生資料，再補上新的
+                        other_students = st.session_state.global_df[st.session_state.global_df["座號"].astype(str) != str(edit_sid)]
+                        st.session_state.global_df = pd.concat([other_students, edited_student_df], ignore_index=True)
+                        st.success("該生資料已更新！")
+                        st.rerun()
+                else:
+                    st.warning("查無此座號的歷史紀錄。")
+
+        # C. 新增整班作業
         with st.expander("📝 新增整班作業登記", expanded=False):
-            hw_name = st.text_input("輸入新作業名稱 (例如: 數學習作 P.5)")
+            hw_name = st.text_input("作業名稱")
             if hw_name:
                 if 'temp_status' not in st.session_state or st.session_state.get('last_hw_name') != hw_name:
                     st.session_state.temp_status = {s['座號']: "已繳交" for s in STUDENT_LIST}
                     st.session_state.last_hw_name = hw_name
                 
-                st.write("點選切換狀態：")
                 cols = st.columns(2)
                 for i, s in enumerate(STUDENT_LIST):
                     sid = s['座號']
                     curr = st.session_state.temp_status[sid]
                     if cols[i%2].button(f"{sid}. {s['姓名']} ({curr})", key=f"bt_{sid}", use_container_width=True):
-                        if curr == "已繳交": st.session_state.temp_status[sid] = "未繳交"
-                        elif curr == "未繳交": st.session_state.temp_status[sid] = "需訂正"
-                        else: st.session_state.temp_status[sid] = "已繳交"
+                        st.session_state.temp_status[sid] = "未繳交" if curr == "已繳交" else "需訂正" if curr == "未繳交" else "已繳交"
                         st.rerun()
 
-                if st.button("💾 儲存並同步至雲端", type="primary"):
-                    new_records = []
-                    for s in STUDENT_LIST:
-                        new_records.append({
-                            "座號": s['座號'], "姓名": s['姓名'], 
-                            "作業名稱": hw_name, "繳交狀態": st.session_state.temp_status[s['座號']], 
-                            "更新日期": str(date.today())
-                        })
-                    st.session_state.global_df = pd.concat([st.session_state.global_df, pd.DataFrame(new_records)], ignore_index=True)
-                    st.balloons() # 噴灑彩帶
-                    st.success(f"🎊 太棒了！『{hw_name}』已成功存入雲端！")
-                    st.rerun()
+                if st.button("🚀 儲存並發布", type="primary"):
+                    new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": hw_name, "繳交狀態": st.session_state.temp_status[s['座號']], "更新日期": str(date.today())} for s in STUDENT_LIST]
+                    st.session_state.global_df = pd.concat([st.session_state.global_df, pd.DataFrame(new_rows)], ignore_index=True)
+                    st.balloons(); st.success("存檔成功！"); st.rerun()
 
-        # C. 歷史總表與備份
-        with st.expander("📊 歷史紀錄與備份"):
+        # D. 備份與清空
+        with st.expander("📊 全班總表備份"):
             if not st.session_state.global_df.empty:
-                st.data_editor(st.session_state.global_df, use_container_width=True)
+                st.dataframe(st.session_state.global_df, use_container_width=True)
                 towrite = io.BytesIO()
                 st.session_state.global_df.to_excel(towrite, index=False, engine='openpyxl')
-                st.download_button("📥 下載 Excel 備份", data=towrite.getvalue(), file_name="作業紀錄備份.xlsx")
-                
-                if st.button("⚠️ 清空所有資料庫"):
-                    st.session_state.global_df = pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
-                    st.success("資料庫已清空！")
-                    st.rerun()
-            else:
-                st.info("目前尚無紀錄。")
-    
-    elif pwd_input == "":
-        st.info("請輸入密碼以顯示老師管理功能。")
-    else:
-        st.error("密碼錯誤。")
+                st.download_button("📥 下載全班 Excel 總表", data=towrite.getvalue(), file_name="作業紀錄總表.xlsx")
