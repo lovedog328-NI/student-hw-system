@@ -4,7 +4,9 @@ from datetime import date
 import io
 
 st.set_page_config(page_title="作業快速登記系統", layout="wide")
-
+@st.cache_resource
+def get_global_data():
+    return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 # --- 1. 管理員密碼 ---
 ADMIN_PASSWORD = "alice" 
 
