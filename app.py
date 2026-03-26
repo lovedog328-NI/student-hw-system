@@ -1,13 +1,14 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date
+import io
 
-st.set_page_config(page_title="雲端作業登記系統", layout="wide")
+st.set_page_config(page_title="作業快速登記系統", layout="wide")
 
-# --- 基礎設定 ---
-ADMIN_PASSWORD = "alice"
-# 固定學生名單 (22位)
+# --- 1. 管理員密碼 ---
+ADMIN_PASSWORD = "alice" 
+
+# --- 2. 固定學生名單 ---
 STUDENT_LIST = [
     {"座號": "1", "姓名": "王瑀淮"}, {"座號": "2", "姓名": "李祐嘉"},
     {"座號": "3", "姓名": "郭晁瑋"}, {"座號": "4", "姓名": "廖勇傑"},
@@ -22,19 +23,19 @@ STUDENT_LIST = [
     {"座號": "21", "姓名": "蔡芊芊"}, {"座號": "22", "姓名": "王楷晴"}
 ]
 
-# 建立 Google Sheets 連線
-conn = st.connection("gsheets", type=GSheetsConnection)
+# --- 3. 核心：跨裝置共用記憶體 ---
+# 使用 st.cache_resource 讓所有連線到這個網址的人共用同一個 DataFrame
+@st.cache_resource
+def get_global_data():
+    return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 
-def load_cloud_data():
-    try:
-        # 讀取雲端資料
-        return conn.read(ttl=0) # ttl=0 確保每次都抓最新
-    except:
-        return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+# 取得共用資料
+if 'global_df' not in st.session_state:
+    st.session_state.global_df = get_global_data()
 
-df = load_cloud_data()
+df = st.session_state.global_df
 
-st.title("☁️ 雲端作業快速登記系統")
+st.title("📚 學生作業快速登記系統 (同步版)")
 menu = st.sidebar.selectbox("功能選單", ["學生查詢中心", "老師管理後台"])
 
 # --- 學生查詢中心 ---
@@ -52,51 +53,13 @@ if menu == "學生查詢中心":
             else:
                 st.table(display_df[["作業名稱", "繳交狀態", "更新日期"]])
         else:
-            st.info("目前尚無你的繳交紀錄。")
+            st.info("尚無紀錄。")
 
 # --- 老師管理後台 ---
 elif menu == "老師管理後台":
-    st.header("👨‍🏫 老師雲端管理")
     pwd_input = st.sidebar.text_input("管理員密碼", type="password")
-    
     if pwd_input == ADMIN_PASSWORD:
-        # 1. 快速補交區
-        with st.expander("🎯 學生補交/訂正快速按鈕", expanded=True):
-            check_sid = st.text_input("輸入學生座號：")
-            if check_sid:
-                s_todo = df[(df["座號"].astype(str) == str(check_sid)) & (df["繳交狀態"] != "已繳交")]
-                if not s_todo.empty:
-                    for idx, row in s_todo.iterrows():
-                        if st.button(f"✅ 完成：{row['作業名稱']}", key=f"fix_{idx}"):
-                            df.at[idx, "繳交狀態"] = "已繳交"
-                            df.at[idx, "更新日期"] = str(date.today())
-                            conn.update(data=df) # 同步到雲端
-                            st.success("已更新至雲端！")
-                            st.rerun()
-                else:
-                    st.info("該生無欠交作業。")
+        st.success("身分驗證成功")
 
-        # 2. 新增整班作業 (按鈕式)
-        with st.expander("📝 新增整班作業"):
-            hw_name = st.text_input("作業名稱")
-            if hw_name:
-                if 'temp_hw' not in st.session_state:
-                    st.session_state.temp_hw = {s['座號']: "已繳交" for s in STUDENT_LIST}
-                
-                cols = st.columns(2)
-                for i, s in enumerate(STUDENT_LIST):
-                    sid, name = s['座號'], s['姓名']
-                    current = st.session_state.temp_hw[sid]
-                    btn_label = f"{sid}. {name} ({current})"
-                    if cols[i % 2].button(btn_label, key=f"btn_{sid}", use_container_width=True):
-                        st.session_state.temp_hw[sid] = "未繳交" if current == "已繳交" else "需訂正" if current == "未繳交" else "已繳交"
-                        st.rerun()
-
-                if st.button("💾 儲存並同步至雲端", type="primary"):
-                    new_data = []
-                    for s in STUDENT_LIST:
-                        new_data.append({"座號": s['座號'], "姓名": s['姓名'], "作業名稱": hw_name, "繳交狀態": st.session_state.temp_hw[s['座號']], "更新日期": str(date.today())})
-                    updated_df = pd.concat([df, pd.DataFrame(new_data)], ignore_index=True)
-                    conn.update(data=updated_df)
-                    st.success("雲端同步成功！")
-                    st.balloons()
+        # 🎯 快速更正區
+        with st.expander
