@@ -34,11 +34,10 @@ if 'global_df' not in st.session_state:
 # --- 4. 介面開始 ---
 st.title("📚 學生作業快速登記系統")
 
-# 側邊欄
 st.sidebar.header("控制面板")
 menu = st.sidebar.selectbox("切換功能", ["學生查詢中心", "老師管理後台"])
 
-# --- 學生查詢中心介面 ---
+# --- 學生查詢中心 ---
 if menu == "學生查詢中心":
     st.header("🔍 學生個人查詢")
     search_id = st.text_input("輸入座號查詢 (1-22)：")
@@ -51,27 +50,25 @@ if menu == "學生查詢中心":
             display_df = result if show_all else result[result["繳交狀態"].isin(["未繳交", "需訂正"])]
             if display_df.empty:
                 st.balloons()
-                st.info("✨ 目前沒有待處理作業。")
+                st.info("✨ 目前沒有待處理作業，太棒了！")
             else:
                 st.table(display_df[["作業名稱", "繳交狀態", "更新日期"]])
         else:
             st.info("目前尚無你的繳交紀錄。")
 
-# --- 老師管理後台介面 ---
+# --- 老師管理後台 ---
 elif menu == "老師管理後台":
     st.header("👨‍🏫 老師管理區")
-    # 將密碼框放在主畫面明顯處，確保老師能看到
     pwd_input = st.text_input("請輸入管理員密碼以開啟功能", type="password")
     
     if pwd_input == ADMIN_PASSWORD:
         st.success("身分驗證成功，功能已解鎖！")
         st.divider()
 
-        # A. 快速補交/訂正按鈕
+        # A. 快速補交/訂正按鈕 (新增更明顯的 Toast 提示)
         with st.expander("🎯 學生補交/訂正快速按鈕", expanded=True):
-            check_sid = st.text_input("輸入要更正的學生座號：", key="quick_check")
+            check_sid = st.text_input("輸入座號：", key="quick_check")
             if check_sid:
-                # 取得最新資料
                 master_df = st.session_state.global_df
                 s_todo = master_df[(master_df["座號"].astype(str) == str(check_sid)) & (master_df["繳交狀態"] != "已繳交")]
                 if not s_todo.empty:
@@ -82,13 +79,14 @@ elif menu == "老師管理後台":
                         if col_btn.button(f"✅ 設為已完成", key=f"fix_{idx}"):
                             st.session_state.global_df.at[idx, "繳交狀態"] = "已繳交"
                             st.session_state.global_df.at[idx, "更新日期"] = str(date.today())
+                            st.toast(f"🎉 成功！{s_todo.iloc[0]['姓名']} 的 {row['作業名稱']} 已更新為已繳交！")
                             st.rerun()
                 else:
-                    st.info("該生目前無欠交或需訂正作業。")
+                    st.info("該生目前無欠交作業。")
 
-        # B. 新增整班作業
+        # B. 新增整班作業 (新增成功後的 Balloons 效果)
         with st.expander("📝 新增整班作業登記", expanded=False):
-            hw_name = st.text_input("輸入新作業名稱 (例如: 國語 L1)")
+            hw_name = st.text_input("輸入新作業名稱 (例如: 數學習作 P.5)")
             if hw_name:
                 if 'temp_status' not in st.session_state or st.session_state.get('last_hw_name') != hw_name:
                     st.session_state.temp_status = {s['座號']: "已繳交" for s in STUDENT_LIST}
@@ -105,7 +103,7 @@ elif menu == "老師管理後台":
                         else: st.session_state.temp_status[sid] = "已繳交"
                         st.rerun()
 
-                if st.button("💾 儲存並發布給全班", type="primary"):
+                if st.button("💾 儲存並同步至雲端", type="primary"):
                     new_records = []
                     for s in STUDENT_LIST:
                         new_records.append({
@@ -114,10 +112,11 @@ elif menu == "老師管理後台":
                             "更新日期": str(date.today())
                         })
                     st.session_state.global_df = pd.concat([st.session_state.global_df, pd.DataFrame(new_records)], ignore_index=True)
-                    st.success("同步成功！")
+                    st.balloons() # 噴灑彩帶
+                    st.success(f"🎊 太棒了！『{hw_name}』已成功存入雲端！")
                     st.rerun()
 
-        # C. 歷史總表與下載
+        # C. 歷史總表與備份
         with st.expander("📊 歷史紀錄與備份"):
             if not st.session_state.global_df.empty:
                 st.data_editor(st.session_state.global_df, use_container_width=True)
@@ -127,6 +126,7 @@ elif menu == "老師管理後台":
                 
                 if st.button("⚠️ 清空所有資料庫"):
                     st.session_state.global_df = pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+                    st.success("資料庫已清空！")
                     st.rerun()
             else:
                 st.info("目前尚無紀錄。")
@@ -134,4 +134,4 @@ elif menu == "老師管理後台":
     elif pwd_input == "":
         st.info("請輸入密碼以顯示老師管理功能。")
     else:
-        st.error("密碼錯誤，請重新輸入。")
+        st.error("密碼錯誤。")
