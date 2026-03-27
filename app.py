@@ -5,7 +5,7 @@ import io
 from datetime import date
 import time
 
-st.set_page_config(page_title="303作業登記系統-預設未交版", layout="wide")
+st.set_page_config(page_title="303作業登記系統", layout="wide")
 
 # --- 1. 固定學生名單 (22位) ---
 STUDENT_LIST = [
