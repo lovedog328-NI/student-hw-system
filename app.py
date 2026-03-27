@@ -5,9 +5,9 @@ import io
 from datetime import date
 import time
 
-st.set_page_config(page_title="303作業登記-極速版", layout="wide")
+st.set_page_config(page_title="303作業登記-管理增強版", layout="wide")
 
-# --- 1. 固定學生名單 ---
+# --- 1. 固定學生名單 (22位) ---
 STUDENT_LIST = [
     {"座號": "1", "姓名": "王瑀淮"}, {"座號": "2", "姓名": "李祐嘉"},
     {"座號": "3", "姓名": "郭晁瑋"}, {"座號": "4", "姓名": "廖勇傑"},
@@ -22,11 +22,10 @@ STUDENT_LIST = [
     {"座號": "21", "姓名": "蔡芊芊"}, {"座號": "22", "姓名": "王楷晴"}
 ]
 
-# --- 2. 雲端讀寫核心 (加速優化版) ---
+# --- 2. 核心讀寫邏輯 (加速優化) ---
 def load_from_cloud():
     try:
         csv_url = st.secrets["google_sync"]["sheet_csv_url"]
-        # 使用時間戳記強制 Google 重新生成最新的 CSV 資料
         df_raw = pd.read_csv(f"{csv_url}&t={int(time.time())}")
         if not df_raw.empty:
             last_content = df_raw.iloc[-1, -1] 
@@ -38,10 +37,8 @@ def load_from_cloud():
         pass
     return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 
-def save_to_cloud_and_local(df):
-    # 1. 先更新本地 Session State，讓畫面「秒變」
+def save_all(df):
     st.session_state.main_df = df
-    # 2. 背景傳送到 Google 表單
     try:
         df_sorted = df.copy()
         df_sorted['座號_int'] = df_sorted['座號'].astype(int)
@@ -49,16 +46,15 @@ def save_to_cloud_and_local(df):
         csv_str = df_sorted.to_csv(index=False)
         url = st.secrets["google_sync"]["form_url"]
         eid = st.secrets["google_sync"]["entry_id"]
-        requests.post(url, data={eid: csv_str}, timeout=5) # 設定超時避免卡住
+        requests.post(url, data={eid: csv_str}, timeout=5)
         return True
     except:
         return False
 
-# 首次載入
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_from_cloud()
 
-# --- 3. 介面 ---
+# --- 3. 介面設計 ---
 st.sidebar.title("🔐 管理權限")
 is_admin = st.sidebar.checkbox("開啟老師管理模式")
 if is_admin:
@@ -70,11 +66,10 @@ if is_admin:
 
 menu = st.sidebar.selectbox("切換功能", ["🔍 學生查詢 / 修改", "🛠️ 老師管理後台"])
 
-# --- 功能 A：查詢與即時修改 (加速感最強) ---
+# --- 功能 A：查詢與即時修改 ---
 if menu == "🔍 學生查詢 / 修改":
     st.header("🔍 學生個人查詢")
     sid = st.text_input("輸入座號 (1-22)：", key="query_sid")
-    
     if sid:
         res = st.session_state.main_df[st.session_state.main_df["座號"].astype(str) == str(sid)]
         if not res.empty:
@@ -91,26 +86,24 @@ if menu == "🔍 學生查詢 / 修改":
                         if c3.button("已交", key=f"q_d_{idx}"):
                             st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
                             st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-                            save_to_cloud_and_local(st.session_state.main_df)
-                            st.rerun() # 立即重刷本地畫面
+                            save_all(st.session_state.main_df); st.rerun()
                         if c4.button("訂正", key=f"q_r_{idx}"):
                             st.session_state.main_df.at[idx, "繳交狀態"] = "需訂正"
                             st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-                            save_to_cloud_and_local(st.session_state.main_df)
-                            st.rerun()
-            with st.expander("已完成"):
+                            save_all(st.session_state.main_df); st.rerun()
+            with st.expander("查看已完成項目"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
 # --- 功能 B：老師管理後台 ---
 elif menu == "🛠️ 老師管理後台":
     if not is_admin:
-        st.warning("請先輸入密碼")
+        st.warning("請先輸入密碼以進行管理")
     else:
         t1, t2, t3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
 
         with t1:
             all_hws = st.session_state.main_df["作業名稱"].unique()
-            sel_hw = st.selectbox("選擇作業名稱：", all_hws)
+            sel_hw = st.selectbox("選擇作業名稱：", all_hws, key="t1_sel")
             if sel_hw:
                 missing = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel_hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
                 if missing.empty:
@@ -121,12 +114,26 @@ elif menu == "🛠️ 老師管理後台":
                         mc1.markdown(f"**{r['座號']}. {r['姓名']}** (`{r['繳交狀態']}`)")
                         if mc2.button("已交", key=f"ld_{idx}"):
                             st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
-                            save_to_cloud_and_local(st.session_state.main_df)
-                            st.rerun()
+                            save_all(st.session_state.main_df); st.rerun()
                         if mc3.button("訂正", key=f"lr_{idx}"):
                             st.session_state.main_df.at[idx, "繳交狀態"] = "需訂正"
-                            save_to_cloud_and_local(st.session_state.main_df)
-                            st.rerun()
+                            save_all(st.session_state.main_df); st.rerun()
+
+        with t2:
+            tid = st.text_input("輸入要補交的座號：", key="back_tid")
+            if tid:
+                s_miss = st.session_state.main_df[(st.session_state.main_df["座號"].astype(str) == str(tid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if not s_miss.empty:
+                    st.write(f"學生：**{s_miss.iloc[0]['姓名']}**")
+                    for idx, row in s_miss.iterrows():
+                        col_a, col_b, col_c = st.columns([3, 1, 1])
+                        col_a.write(f"📌 {row['作業名稱']} (`{row['繳交狀態']}`)")
+                        if col_b.button("✅ 已交", key=f"bt_d_{idx}"):
+                            st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
+                            save_all(st.session_state.main_df); st.rerun()
+                        if col_c.button("✏️ 訂正", key=f"bt_r_{idx}"):
+                            st.session_state.main_df.at[idx, "繳交狀態"] = "需訂正"
+                            save_all(st.session_state.main_df); st.rerun()
 
         with t3:
             hw_n = st.text_input("新作業名稱")
@@ -134,23 +141,33 @@ elif menu == "🛠️ 老師管理後台":
                 if 'tmp' not in st.session_state or st.session_state.get('lhwn') != hw_n:
                     st.session_state.tmp = {s['座號']: "未繳交" for s in STUDENT_LIST}
                     st.session_state.lhwn = hw_n
-                
                 cols = st.columns(3)
                 for i, s in enumerate(STUDENT_LIST):
-                    sid = s['座號']
-                    curr = st.session_state.tmp[sid]
+                    sid = s['座號']; curr = st.session_state.tmp[sid]
                     if cols[i%3].button(f"{sid}.{s['姓名']}\n({curr})", key=f"t3_{sid}", use_container_width=True):
                         st.session_state.tmp[sid] = "已繳交" if curr == "未繳交" else "需訂正" if curr == "已繳交" else "未繳交"
                         st.rerun()
-                
-                if st.button("🚀 儲存同步", type="primary", use_container_width=True):
+                if st.button("🚀 儲存並發佈", type="primary", use_container_width=True):
                     new_l = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":hw_n, "繳交狀態":st.session_state.tmp[s['座號']], "更新日期":str(date.today())} for s in STUDENT_LIST]
                     updated = pd.concat([st.session_state.main_df, pd.DataFrame(new_l)], ignore_index=True)
-                    save_to_cloud_and_local(updated)
-                    st.success("儲存成功")
-                    st.rerun()
+                    save_all(updated); st.success("發佈成功！"); st.rerun()
 
-        st.sidebar.divider()
-        if st.sidebar.button("🔄 強制刷新雲端資料"):
-            st.session_state.main_df = load_from_cloud()
-            st.rerun()
+        # --- 🗑️ 刪除重複/錯誤作業的功能區 ---
+        st.divider()
+        with st.expander("🗑️ 危險區域：刪除錯誤作業"):
+            st.warning("請注意：刪除後將無法恢復。")
+            del_hw_list = st.session_state.main_df["作業名稱"].unique()
+            target_hw = st.selectbox("選擇要刪除的作業：", ["請選擇"] + list(del_hw_list), key="del_hw_sel")
+            confirm_del = st.checkbox("我確定要永久刪除此項作業的所有紀錄")
+            if st.button("❌ 執行刪除", type="secondary", disabled=not confirm_del):
+                if target_hw != "請選擇":
+                    updated_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target_hw]
+                    save_all(updated_df)
+                    st.success(f"已成功刪除「{target_hw}」的所有紀錄")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("請先選擇要刪除的作業名稱")
+
+        if st.sidebar.button("🔄 強制刷新雲端"):
+            st.session_state.main_df = load_from_cloud(); st.rerun()
