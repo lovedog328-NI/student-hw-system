@@ -5,9 +5,9 @@ import io
 from datetime import date
 import time
 
-st.set_page_config(page_title="303作業登記系統-即時修改版", layout="wide")
+st.set_page_config(page_title="303作業登記系統-清晰列表版", layout="wide")
 
-# --- 1. 固定名單 ---
+# --- 1. 固定學生名單 (22位) ---
 STUDENT_LIST = [
     {"座號": "1", "姓名": "王瑀淮"}, {"座號": "2", "姓名": "李祐嘉"},
     {"座號": "3", "姓名": "郭晁瑋"}, {"座號": "4", "姓名": "廖勇傑"},
@@ -30,7 +30,9 @@ def load_from_cloud():
         if len(df_raw) > 0:
             last_content = df_raw.iloc[-1, -1] 
             df = pd.read_csv(io.StringIO(last_content), dtype={'座號': str})
-            df = df.sort_values(by=["作業名稱", "座號"])
+            # 排序：作業名稱 -> 座號
+            df['座號_int'] = df['座號'].astype(int)
+            df = df.sort_values(by=["作業名稱", "座號_int"]).drop(columns=['座號_int'])
             return df
     except:
         pass
@@ -38,7 +40,8 @@ def load_from_cloud():
 
 def save_to_cloud(df):
     try:
-        df = df.sort_values(by=["作業名稱", "座號"])
+        df['座號_int'] = df['座號'].astype(int)
+        df = df.sort_values(by=["作業名稱", "座號_int"]).drop(columns=['座號_int'])
         csv_str = df.to_csv(index=False)
         url = st.secrets["google_sync"]["form_url"]
         eid = st.secrets["google_sync"]["entry_id"]
@@ -47,108 +50,124 @@ def save_to_cloud(df):
     except:
         return False
 
+# 初始化載入
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_from_cloud()
 
-# --- 3. 介面設計 ---
-st.title("📚 303 作業登記與即時修改")
-
-# 側邊欄：老師身分標記（用來決定是否顯示修改按鈕）
-is_admin = st.sidebar.checkbox("老師管理模式 (開啟後可直接修改狀態)")
+# --- 3. 側邊欄 ---
+st.sidebar.title("🔐 管理權限")
+is_admin = st.sidebar.checkbox("開啟老師管理模式")
 if is_admin:
-    pwd = st.sidebar.text_input("輸入管理密碼", type="password")
+    pwd = st.sidebar.text_input("管理密碼", type="password")
     if pwd != "alice":
-        st.sidebar.warning("密碼錯誤，僅供查詢")
+        st.sidebar.warning("密碼錯誤")
         is_admin = False
+    else:
+        st.sidebar.success("✅ 老師模式已啟動")
 
-menu = st.sidebar.selectbox("切換功能", ["學生查詢 / 即時補交", "老師管理後台"])
+menu = st.sidebar.selectbox("切換功能", ["🔍 學生查詢與即時修改", "🛠️ 老師管理後台"])
 
 # --- 功能 A：查詢與即時修改 ---
-if menu == "學生查詢 / 即時補交":
-    st.header("🔍 學生作業進度")
-    sid = st.text_input("輸入座號 (1-22)：", placeholder="例如: 5")
+if menu == "🔍 學生查詢與即時修改":
+    st.header("🔍 學生個人作業進度查詢")
+    sid = st.text_input("輸入座號 (1-22)：", placeholder="例如: 10")
     
     if sid:
         df = st.session_state.main_df
         res = df[df["座號"].astype(str) == str(sid)]
-        
         if not res.empty:
             name = res.iloc[0]['姓名']
-            st.subheader(f"👤 {name} 同學的作業清單")
-            
-            # 篩選未完成的作業
+            st.subheader(f"👤 {name} 同學的作業狀況")
             todo = res[res["繳交狀態"] != "已繳交"]
-            
             if todo.empty:
-                st.balloons()
-                st.success("✨ 太棒了！目前沒有欠交的作業。")
+                st.balloons(); st.success("✨ 全部作業都交齊了，好棒！")
             else:
-                st.warning(f"還有 {len(todo)} 項作業待處理：")
-                
-                # 建立即時修改列表
+                st.warning(f"目前尚有 {len(todo)} 項作業待處理：")
                 for idx, row in todo.iterrows():
-                    col1, col2, col3 = st.columns([3, 2, 2])
-                    col1.write(f"📌 **{row['作業名稱']}**")
-                    col2.write(f"狀態：`{row['繳交狀態']}`")
-                    
-                    # 如果是管理模式，顯示修改按鈕
+                    c1, c2, c3 = st.columns([3, 2, 2])
+                    c1.write(f"📌 **{row['作業名稱']}**")
+                    c2.write(f"狀態：`{row['繳交狀態']}`")
                     if is_admin:
-                        if col3.button(f"✅ 改為已完成", key=f"edit_{idx}"):
+                        if c3.button(f"✅ 改為已完成", key=f"q_edit_{idx}"):
                             st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
                             st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
                             save_to_cloud(st.session_state.main_df)
-                            st.toast(f"已更新 {name} 的 {row['作業名稱']}")
-                            time.sleep(1)
+                            st.toast(f"已更新 {name} 的紀錄")
+                            time.sleep(0.5)
                             st.rerun()
                     else:
-                        col3.write(f"📅 {row['更新日期']}")
-            
-            # 顯示已完成作業（摺疊區）
-            with st.expander("查看已完成作業"):
+                        c3.write(f"📅 {row['更新日期']}")
+            with st.expander("查看已完成項目"):
                 done = res[res["繳交狀態"] == "已繳交"]
                 st.table(done[["作業名稱", "更新日期"]])
         else:
-            st.info("目前尚無此座號的登記紀錄。")
+            st.info("尚無該座號的登記資料。")
 
 # --- 功能 B：老師管理後台 ---
-elif menu == "老師管理後台":
-    if is_admin:
-        st.header("👨‍🏫 全班進度管理")
-        
-        # 1. 缺交名單摘要
-        with st.expander("🔍 快速查看各項作業缺交名單", expanded=True):
-            if not st.session_state.main_df.empty:
-                all_hw = st.session_state.main_df["作業名稱"].unique()
-                target_hw = st.selectbox("選擇作業：", all_hw)
-                missing = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
-                if missing.empty:
-                    st.success("全班均已繳交！")
-                else:
-                    st.write("、".join([f"{r['座號']}.{r['姓名']}({r['繳交狀態']})" for _, r in missing.iterrows()]))
-            else:
-                st.info("尚無紀錄")
+elif menu == "🛠️ 老師管理後台":
+    if not is_admin:
+        st.warning("請先在左側開啟『老師管理模式』並輸入正確密碼。")
+    else:
+        t1, t2, t3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
 
-        # 2. 新增作業
-        with st.expander("📝 新增整班作業"):
-            hw_name = st.text_input("新作業名稱 (如: 數習 P.10)")
+        with t1:
+            st.subheader("各項作業缺交名單 (一人一排列表)")
+            if not st.session_state.main_df.empty:
+                all_hws = st.session_state.main_df["作業名稱"].unique()
+                sel_hw = st.selectbox("請選擇作業名稱：", all_hws)
+                if sel_hw:
+                    hw_data = st.session_state.main_df[st.session_state.main_df["作業名稱"] == sel_hw]
+                    missing = hw_data[hw_data["繳交狀態"] != "已繳交"]
+                    if missing.empty:
+                        st.success("🎉 全班均已繳交完成！")
+                    else:
+                        st.error(f"待補交/訂正名單 (共 {len(missing)} 人)：")
+                        # --- 修改處：改為一人一排顯示 ---
+                        for _, r in missing.iterrows():
+                            st.markdown(f"- **{r['座號']}號 {r['姓名']}**：目前狀態為 `{r['繳交狀態']}`")
+            else:
+                st.info("目前無資料。")
+
+        with t2:
+            st.subheader("依座號快速補交")
+            tid = st.text_input("輸入要補交的座號：", key="back_tid")
+            if tid:
+                df = st.session_state.main_df
+                s_miss = df[(df["座號"].astype(str) == str(tid)) & (df["繳交狀態"] != "已繳交")]
+                if not s_miss.empty:
+                    st.write(f"學生：**{s_miss.iloc[0]['姓名']}**")
+                    for idx, row in s_miss.iterrows():
+                        if st.button(f"✅ 完成：{row['作業名稱']}", key=f"btab_{idx}"):
+                            st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
+                            st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
+                            save_to_cloud(st.session_state.main_df)
+                            st.toast("已同步雲端")
+                            st.rerun()
+                else:
+                    st.info("該生目前無缺交紀錄。")
+
+        with t3:
+            st.subheader("新增整班作業登記")
+            hw_name = st.text_input("新作業名稱 (如: 國 L5 卷)")
             if hw_name:
-                if 'temp_status' not in st.session_state or st.session_state.get('last_hw_name') != hw_name:
-                    st.session_state.temp_status = {s['座號']: "已繳交" for s in STUDENT_LIST}
-                    st.session_state.last_hw_name = hw_name
-                
+                if 'tmp_s' not in st.session_state or st.session_state.get('last_hwn') != hw_name:
+                    st.session_state.tmp_s = {s['座號']: "已繳交" for s in STUDENT_LIST}
+                    st.session_state.last_hwn = hw_name
                 cols = st.columns(3)
                 for i, s in enumerate(STUDENT_LIST):
                     sid = s['座號']
-                    curr = st.session_state.temp_status[sid]
-                    if cols[i%3].button(f"{sid}.{s['姓名']}\n({curr})", key=f"btn_{sid}", use_container_width=True):
-                        st.session_state.temp_status[sid] = "未繳交" if curr == "已繳交" else "需訂正" if curr == "未繳交" else "已繳交"
+                    cur = st.session_state.tmp_s[sid]
+                    if cols[i%3].button(f"{sid}.{s['姓名']} ({cur})", key=f"t3_{sid}", use_container_width=True):
+                        st.session_state.tmp_s[sid] = "未繳交" if cur == "已繳交" else "需訂正" if cur == "未繳交" else "已繳交"
                         st.rerun()
-                
-                if st.button("🚀 儲存並同步到雲端", type="primary", use_container_width=True):
-                    new_data = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":hw_name, "繳交狀態":st.session_state.temp_status[s['座號']], "更新日期":str(date.today())} for s in STUDENT_LIST]
-                    st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_data)], ignore_index=True)
+                if st.button("🚀 確認發佈並儲存", type="primary", use_container_width=True):
+                    new_l = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":hw_name, "繳交狀態":st.session_state.tmp_s[s['座號']], "更新日期":str(date.today())} for s in STUDENT_LIST]
+                    st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_l)], ignore_index=True)
                     save_to_cloud(st.session_state.main_df)
-                    st.success("存檔成功！")
+                    st.success("發佈成功！")
                     st.rerun()
-    else:
-        st.warning("請先在左側開啟『老師管理模式』並輸入正確密碼。")
+
+        st.divider()
+        if st.button("🔄 從雲端重新讀取資料"):
+            st.session_state.main_df = load_from_cloud()
+            st.rerun()
