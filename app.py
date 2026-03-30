@@ -6,7 +6,7 @@ from datetime import date
 from streamlit_gsheets import GSheetsConnection
 import time
 
-st.set_page_config(page_title="303作業登記-全功能完整版", layout="wide")
+st.set_page_config(page_title="303作業登記", layout="wide")
 
 # --- 1. 固定學生名單 (22位) ---
 STUDENT_LIST = [
