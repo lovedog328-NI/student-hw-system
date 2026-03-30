@@ -6,9 +6,9 @@ from datetime import date
 from streamlit_gsheets import GSheetsConnection
 import time
 
-st.set_page_config(page_title="303作業登記-完美排序版", layout="wide")
+st.set_page_config(page_title="303作業登記-極速同步版", layout="wide")
 
-# --- 1. 固定學生名單 (22位) ---
+# --- 1. 固定學生名單 ---
 STUDENT_LIST = [
     {"座號": "1", "姓名": "王瑀淮"}, {"座號": "2", "姓名": "李祐嘉"},
     {"座號": "3", "姓名": "郭晁瑋"}, {"座號": "4", "姓名": "廖勇傑"},
@@ -23,21 +23,19 @@ STUDENT_LIST = [
     {"座號": "21", "姓名": "蔡芊芊"}, {"座號": "22", "姓名": "王楷晴"}
 ]
 
-# --- 2. 雲端讀寫與排序核心 ---
+# --- 2. 核心邏輯：排序與同步 ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def process_sort(df):
-    """統一排序邏輯：作業名稱 -> 座號"""
     if df.empty: return df
-    # 建立臨時排序列，確保座號是按數字排 (1, 2, 3...) 而非字串 (1, 10, 11...)
     df['座號_int'] = pd.to_numeric(df['座號'], errors='coerce')
-    # 先排作業名稱，再排座號
     df = df.sort_values(by=["作業名稱", "座號_int"], ascending=[True, True])
     return df.drop(columns=['座號_int'])
 
 def load_data_api():
+    # 加上隨機參數防止 Google 伺服器回傳舊檔案
     try:
-        df_raw = conn.read(ttl=0)
+        df_raw = conn.read(ttl=0) 
         if not df_raw.empty:
             last_content = df_raw.iloc[-1, -1]
             df = pd.read_csv(io.StringIO(last_content), dtype={'座號': str})
@@ -47,14 +45,18 @@ def load_data_api():
     return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 
 def save_and_refresh(df):
-    # 存檔前再次強制排序，確保雲端資料也是整齊的
-    df_sorted = process_sort(df)
-    st.session_state.main_df = df_sorted
+    # 1. 立即更新本地顯示 (這讓使用者感覺不到延遲)
+    sorted_df = process_sort(df)
+    st.session_state.main_df = sorted_df
+    
+    # 2. 同步到雲端
     try:
-        csv_str = df_sorted.to_csv(index=False)
+        csv_str = sorted_df.to_csv(index=False)
         url = st.secrets["google_sync"]["form_url"]
         eid = st.secrets["google_sync"]["entry_id"]
-        requests.post(url, data={eid: csv_str}, timeout=5)
+        # 使用 post 發送，不等待長時間回傳
+        requests.post(url, data={eid: csv_str}, timeout=3)
+        # 清除所有可能的快取
         st.cache_data.clear()
         return True
     except:
@@ -64,7 +66,7 @@ def save_and_refresh(df):
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data_api()
 
-# --- 3. 介面設計 ---
+# --- 3. UI 介面 ---
 st.sidebar.title("🔐 管理權限")
 is_admin = st.sidebar.checkbox("開啟老師管理模式")
 if is_admin:
@@ -97,13 +99,14 @@ if menu == "🔍 學生查詢 / 修改":
                         if c3.button("已交", key=f"q_d_{idx}"):
                             st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
                             st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-                            save_and_refresh(st.session_state.main_df); st.rerun()
+                            save_and_refresh(st.session_state.main_df)
+                            st.rerun()
                         if c4.button("訂正", key=f"q_r_{idx}"):
                             st.session_state.main_df.at[idx, "繳交狀態"] = "需訂正"
                             st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-                            save_and_refresh(st.session_state.main_df); st.rerun()
+                            save_and_refresh(st.session_state.main_df)
+                            st.rerun()
             with st.expander("查看已完成項目"):
-                # 已完成的部分同樣會按作業名稱排好
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
 # --- 功能 B：老師管理後台 ---
@@ -114,7 +117,6 @@ elif menu == "🛠️ 老師管理後台":
         t1, t2, t3 = st.tabs(["📋 缺交名單", "🎯 座號補交", "📝 新增作業"])
 
         with t1:
-            st.subheader("📋 缺交名單 (按座號排序)")
             hws = st.session_state.main_df["作業名稱"].unique()
             sel = st.selectbox("選擇作業：", ["請選擇"] + list(hws))
             if sel != "請選擇":
@@ -132,7 +134,6 @@ elif menu == "🛠️ 老師管理後台":
                             save_and_refresh(st.session_state.main_df); st.rerun()
 
         with t2:
-            st.subheader("🎯 依座號快速補交")
             tsid = st.text_input("請輸入座號：", key="t2_sid")
             if tsid:
                 sm = st.session_state.main_df[(st.session_state.main_df["座號"].astype(str) == str(tsid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
@@ -149,9 +150,8 @@ elif menu == "🛠️ 老師管理後台":
                             save_and_refresh(st.session_state.main_df); st.rerun()
 
         with t3:
-            st.subheader("📝 新增整班作業")
             if 'hw_val' not in st.session_state: st.session_state.hw_val = ""
-            hw_n = st.text_input("作業名稱 (例如：國習 L1)：", value=st.session_state.hw_val)
+            hw_n = st.text_input("作業名稱：", value=st.session_state.hw_val)
             if hw_n:
                 if 'tmp' not in st.session_state or st.session_state.lhwn != hw_n:
                     st.session_state.tmp = {s['座號']: "未繳交" for s in STUDENT_LIST}
@@ -165,19 +165,17 @@ elif menu == "🛠️ 老師管理後台":
                 if st.button("🚀 確認發佈並同步", type="primary", use_container_width=True):
                     new_l = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":hw_n, "繳交狀態":st.session_state.tmp[s['座號']], "更新日期":str(date.today())} for s in STUDENT_LIST]
                     up = pd.concat([st.session_state.main_df, pd.DataFrame(new_l)], ignore_index=True)
-                    if save_and_refresh(up):
-                        st.session_state.hw_val = ""; st.session_state.lhwn = ""
-                        st.success("發佈成功！"); st.rerun()
+                    save_and_refresh(up)
+                    st.session_state.hw_val = ""; st.session_state.lhwn = ""
+                    st.success("發佈成功！"); st.rerun()
 
         st.divider()
-        with st.expander("🗑️ 刪除錯誤作業"):
+        with st.expander("🗑️ 刪除紀錄"):
             dels = st.session_state.main_df["作業名稱"].unique()
             target = st.selectbox("選擇要刪除的作業：", ["請選擇"] + list(dels))
-            confirm = st.checkbox("確認永久刪除")
-            if st.button("❌ 執行刪除") and confirm and target != "請選擇":
+            if st.button("❌ 執行刪除") and target != "請選擇":
                 save_and_refresh(st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]); st.rerun()
 
         if st.sidebar.button("🔄 強制刷新數據"):
-            st.cache_data.clear()
             st.session_state.main_df = load_data_api()
             st.rerun()
