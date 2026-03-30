@@ -224,4 +224,20 @@ elif menu == "🛠️ 老師後台":
             hws = st.session_state.main_df["作業名稱"].unique()
             sel_hw = st.selectbox("選擇作業", ["請選擇"] + list(hws))
             if sel_hw != "請選擇":
-                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel_hw) & (st.session_state.main_df["繳交狀態"] != "已繳
+                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel_hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                for i, r in m.iterrows():
+                    ca, cb, cc = st.columns([3, 1, 1])
+                    ca.write(f"**{r['座號']}. {r['姓名']}**")
+                    cb.button("已交", key=f"t1_{i}", on_click=update_status, args=(i, "已繳交"))
+                    cc.button("訂正", key=f"t1r_{i}", on_click=update_status, args=(i, "需訂正"))
+
+        with t3:
+            st.subheader("📝 新增整班作業")
+            new_hw = st.text_input("輸入名稱：")
+            if new_hw:
+                if st.button("🚀 點此發佈新作業"):
+                    new_list = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":new_hw, "繳交狀態":"未繳交", "更新日期":str(date.today())} for s in STUDENT_LIST]
+                    st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_list)], ignore_index=True)
+                    save_to_cloud(st.session_state.main_df)
+                    st.success(f"已發佈 {new_hw}")
+                    time.sleep(1); st.rerun()
