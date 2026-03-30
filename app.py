@@ -184,6 +184,7 @@ def update_val(idx, status):
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
     save_to_cloud(st.session_state.main_df)
 
+# --- 功能實現 ---
 if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
@@ -191,14 +192,21 @@ if menu == "🔍 學生查詢":
         res = df[df["座號"] == str(sid)]
         if not res.empty:
             st.subheader(f"👤 {res.iloc[0]['姓名']} 的作業狀況")
+            
+            # 💡 判斷是否還有欠交或需訂正
             todo = res[res["繳交狀態"] != "已繳交"]
-            if todo.empty: st.success("🎉 全部作業都交齊囉！")
-            for idx, row in todo.iterrows():
-                c1, c2, c3, c4 = st.columns([3, 1, 1, 1]) # 增加一欄
-                c1.write(f"📌 {row['作業名稱']} ({row['繳交狀態']})")
-                if is_admin:
-                    c2.button("已交", key=f"q_{idx}", on_click=update_val, args=(idx, "已繳交"))
-                    c3.button("需改", key=f"qr_{idx}", on_click=update_val, args=(idx, "需訂正")) # 補回
+            
+            if todo.empty:
+                # 🎉 補回恭喜訊息
+                st.success("✨ 太棒了！目前的作業全都交齊囉！請繼續保持！")
+            else:
+                for idx, row in todo.iterrows():
+                    c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
+                    c1.write(f"📌 {row['作業名稱']} ({row['繳交狀態']})")
+                    if is_admin:
+                        c2.button("已交", key=f"q_{idx}", on_click=update_val, args=(idx, "已繳交"))
+                        c3.button("需改", key=f"qr_{idx}", on_click=update_val, args=(idx, "需訂正"))
+            
             with st.expander("查看已完成項目"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
@@ -209,27 +217,32 @@ elif menu == "🛠️ 老師後台":
         t1, t2, t3 = st.tabs(["缺交名單", "快速補交", "新增作業"])
         with t1:
             hws = st.session_state.main_df["作業名稱"].unique()
-            sel = st.selectbox("選作業", ["請選擇"] + list(hws))
+            sel = st.selectbox("選作業項目", ["請選擇"] + list(hws))
             if sel != "請選擇":
                 m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if m.empty:
+                    st.success("🎉 這項作業全班都交齊了！")
                 for i, r in m.iterrows():
                     ca, cb, cc = st.columns([3, 1, 1])
                     ca.write(f"{r['座號']}. {r['姓名']}")
                     cb.button("已交", key=f"t1_{i}", on_click=update_val, args=(i, "已繳交"))
-                    cc.button("需改", key=f"t1r_{i}", on_click=update_val, args=(i, "需訂正")) # 補回
+                    cc.button("需改", key=f"t1r_{i}", on_click=update_val, args=(i, "需訂正"))
         
         with t2:
-            tsid = st.text_input("補交座號：")
+            tsid = st.text_input("快速補交座號：")
             if tsid:
                 sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
-                for i, r in sm.iterrows():
-                    ra, rb, rc = st.columns([3, 1, 1])
-                    ra.write(f"📌 {r['作業名稱']}")
-                    rb.button("已交", key=f"t2_{i}", on_click=update_status if 'update_status' in locals() else update_val, args=(i, "已繳交"))
-                    rc.button("需改", key=f"t2r_{i}", on_click=update_val, args=(i, "需訂正")) # 補回
+                if sm.empty:
+                    st.info("該生目前沒有欠交作業。")
+                else:
+                    for i, r in sm.iterrows():
+                        ra, rb, rc = st.columns([3, 1, 1])
+                        ra.write(f"📌 {r['作業名稱']}")
+                        rb.button("已交", key=f"t2_{i}", on_click=update_val, args=(i, "已繳交"))
+                        rc.button("需改", key=f"t2r_{i}", on_click=update_val, args=(i, "需訂正"))
 
         with t3:
-            name = st.text_input("名稱：")
+            name = st.text_input("作業名稱：")
             if st.button("🚀 發佈新作業") and name:
                 new_l = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":name, "繳交狀態":"未繳交", "更新日期":""} for s in STUDENT_LIST]
                 new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_l)], ignore_index=True)
@@ -239,9 +252,9 @@ elif menu == "🛠️ 老師後台":
                     st.rerun()
 
         st.divider()
-        with st.expander("🗑️ 刪除作業"):
-            target = st.selectbox("選作業：", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
-            if st.button("確認刪除") and target != "請選擇":
+        with st.expander("🗑️ 刪除紀錄"):
+            target = st.selectbox("選擇要刪除的作業：", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
+            if st.button("確認永久刪除") and target != "請選擇":
                 new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
                 save_to_cloud(new_df)
                 st.rerun()
