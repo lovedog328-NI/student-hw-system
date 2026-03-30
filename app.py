@@ -6,8 +6,8 @@ import requests
 import time
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-恢復版", layout="wide")
-st.title("📚 303 作業登記系統 (資料已強制恢復)")
+st.set_page_config(page_title="303作業登記", layout="wide")
+st.title("📚 303 作業登記系統")
 
 # --- 2. 固定學生名單 ---
 STUDENT_LIST = [
@@ -24,7 +24,7 @@ STUDENT_LIST = [
     {"座號": "21", "姓名": "蔡芊芊"}, {"座號": "22", "姓名": "王楷晴"}
 ]
 
-# --- 3. 歷史欠交資料 (已清洗格式) ---
+# --- 3. 歷史欠交資料 (已將內部逗號改為點，防止解析錯誤) ---
 RAW_HISTORY = """座號,作業名稱,繳交狀態
 1,3/27聯絡簿,已繳交
 19,3/27聯絡簿,未繳交
@@ -109,35 +109,35 @@ RAW_HISTORY = """座號,作業名稱,繳交狀態
 14,數習28.29,需訂正
 19,數習28.29,需訂正
 21,數習28.29,需訂正
-18,數習p.18,19,需訂正
-19,數習p.18,19,需訂正
+18,數習p.18.19,需訂正
+19,數習p.18.19,需訂正
 22,數習p.25,未繳交
-1,數習p.34,35,未繳交
-2,數習p.34,35,未繳交
-3,數習p.34,35,未繳交
-4,數習p.34,35,未繳交
-6,數習p.34,35,未繳交
-8,數習p.34,35,未繳交
-12,數習p.34,35,未繳交
-14,數習p.34,35,未繳交
-18,數習p.34,35,需訂正
-19,數習p.34,35,未繳交
-21,數習p.34,35,未繳交
-22,數習p.34,35,未繳交
+1,數習p.34.35,未繳交
+2,數習p.34.35,未繳交
+3,數習p.34.35,未繳交
+4,數習p.34.35,未繳交
+6,數習p.34.35,未繳交
+8,數習p.34.35,未繳交
+12,數習p.34.35,未繳交
+14,數習p.34.35,未繳交
+18,數習p.34.35,需訂正
+19,數習p.34.35,未繳交
+21,數習p.34.35,未繳交
+22,數習p.34.35,未繳交
 1,數課45.46,未繳交
-6,數課p.17,18,未繳交
+6,數課p.17.18,未繳交
 21,數重p.10,需訂正
 22,數重p.10,未繳交
 6,數重p.11,未繳交
 18,數重p.11,需訂正
 19,數重p.11,未繳交
 21,數重p.11,需訂正
-1,數重p.12~13,未繳交
-4,數重p.12~13,需訂正
-6,數重p.12~13,需訂正
-15,數重p.12~13,需訂正
-19,數重p.12~13,未繳交
-21,數重p.12~13,需訂正
+1,數重p.12.13,未繳交
+4,數重p.12.13,需訂正
+6,數重p.12.13,需訂正
+15,數重p.12.13,需訂正
+19,數重p.12.13,未繳交
+21,數重p.12.13,需訂正
 21,數重p.5,未繳交
 22,數重p.8,需訂正
 22,甲本p.20-22,未繳交"""
@@ -173,8 +173,21 @@ def generate_initial_df():
 
 # --- 5. 存取與 UI ---
 if 'main_df' not in st.session_state:
-    # 💡 這次直接在記憶體中生成，保證資料一定會出現
-    st.session_state.main_df = generate_initial_df()
+    # 優先嘗試讀取雲端
+    try:
+        url = f"https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/export?format=csv&t={int(time.time())}"
+        r = requests.get(url, timeout=5)
+        if r.status_code == 200:
+            df_raw = pd.read_csv(io.StringIO(r.text))
+            content = str(df_raw.iloc[-1, -1])
+            if "座號" in content:
+                st.session_state.main_df = pd.read_csv(io.StringIO(content), dtype={'座號': str})
+    except:
+        pass
+    
+    # 如果雲端失敗或沒資料，則加載歷史資料
+    if 'main_df' not in st.session_state:
+        st.session_state.main_df = generate_initial_df()
 
 def save_to_cloud(df):
     try:
@@ -225,6 +238,7 @@ elif menu == "🛠️ 老師後台":
             sel_hw = st.selectbox("選擇作業", ["請選擇"] + list(hws))
             if sel_hw != "請選擇":
                 m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel_hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if m.empty: st.success("🎉 全班都交齊了！")
                 for i, r in m.iterrows():
                     ca, cb, cc = st.columns([3, 1, 1])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
@@ -241,3 +255,7 @@ elif menu == "🛠️ 老師後台":
                     save_to_cloud(st.session_state.main_df)
                     st.success(f"已發佈 {new_hw}")
                     time.sleep(1); st.rerun()
+
+if st.sidebar.button("🔄 重置數據"):
+    st.session_state.clear()
+    st.rerun()
