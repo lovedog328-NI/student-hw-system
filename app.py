@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="303作業登記", layout="wide")
 st.title("📚 303 作業登記系統")
 
-# --- 2. 核心名單與 3/27 歷史紀錄 ---
+# --- 2. 核心名單與 3/27 歷史紀錄 (系統基因) ---
 STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate(["王瑀淮", "李祐嘉", "郭晁瑋", "廖勇傑", "潘彥廷", "郭家宇", "王悅芯", "劉橙", "洪語緹", "林祈平", "鄧安晴", "蔣語桐", "邱薇瑀", "鍾芮昕", "詹筠蓁", "劉姝言", "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"], 1)]
 
 RAW_BACKUP = """座號,姓名,作業名稱,繳交狀態,更新日期
@@ -129,7 +129,7 @@ RAW_BACKUP = """座號,姓名,作業名稱,繳交狀態,更新日期
 22,王楷晴,數重p.8,需訂正,2026-03-27
 22,王楷晴,甲本p.20-22,未繳交,2026-03-27"""
 
-# --- 3. 核心功能 ---
+# --- 3. 核心同步邏輯 ---
 def fetch_cloud():
     try:
         url = f"https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/export?format=csv&gid=0&v={int(time.time())}"
@@ -184,7 +184,7 @@ def update_val(idx, status):
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
     save_to_cloud(st.session_state.main_df)
 
-# --- 學生查詢 ---
+# --- 功能實現 ---
 if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
@@ -192,11 +192,9 @@ if menu == "🔍 學生查詢":
         res = df[df["座號"] == str(sid)]
         if not res.empty:
             st.subheader(f"👤 {res.iloc[0]['姓名']} 的作業清單")
-            
-            # 判斷是否全交齊
             todo = res[res["繳交狀態"].str.strip().isin(["未繳交", "需訂正"])]
             
-            if len(todo) == 0:
+            if todo.empty:
                 st.success("✨ 太棒了！目前的作業全都交齊囉！請繼續保持！")
             else:
                 for idx, row in todo.iterrows():
@@ -210,7 +208,6 @@ if menu == "🔍 學生查詢":
                 done = res[~res["繳交狀態"].str.strip().isin(["未繳交", "需訂正"])]
                 st.table(done[["作業名稱", "更新日期"]])
 
-# --- 老師後台 ---
 elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("請先輸入密碼。")
@@ -232,7 +229,6 @@ elif menu == "🛠️ 老師後台":
         with t2:
             tsid = st.text_input("快速補交座號：")
             if tsid:
-                # 修復這裡的語法錯誤
                 sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"].str.strip().isin(["未繳交", "需訂正"]))]
                 if sm.empty:
                     st.info("該生目前沒有欠交作業。")
