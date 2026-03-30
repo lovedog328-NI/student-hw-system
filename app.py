@@ -9,7 +9,7 @@ import time
 st.set_page_config(page_title="303作業登記", layout="wide")
 st.title("📚 303 作業登記系統")
 
-# --- 2. 核心名單與 3/27 歷史紀錄 (永久備份) ---
+# --- 2. 核心名單與 3/27 歷史紀錄 ---
 STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate(["王瑀淮", "李祐嘉", "郭晁瑋", "廖勇傑", "潘彥廷", "郭家宇", "王悅芯", "劉橙", "洪語緹", "林祈平", "鄧安晴", "蔣語桐", "邱薇瑀", "鍾芮昕", "詹筠蓁", "劉姝言", "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"], 1)]
 
 RAW_BACKUP = """座號,姓名,作業名稱,繳交狀態,更新日期
@@ -184,7 +184,7 @@ def update_val(idx, status):
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
     save_to_cloud(st.session_state.main_df)
 
-# --- 學生查詢介面 ---
+# --- 學生查詢 ---
 if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
@@ -193,14 +193,12 @@ if menu == "🔍 學生查詢":
         if not res.empty:
             st.subheader(f"👤 {res.iloc[0]['姓名']} 的作業清單")
             
-            # 🔍 精準判斷欠交或需訂正 (排除空格干擾)
+            # 判斷是否全交齊
             todo = res[res["繳交狀態"].str.strip().isin(["未繳交", "需訂正"])]
             
             if len(todo) == 0:
-                # 🎉 只有真的都交齊了才顯示
                 st.success("✨ 太棒了！目前的作業全都交齊囉！請繼續保持！")
             else:
-                st.warning(f"目前還有 {len(todo)} 項作業待完成：")
                 for idx, row in todo.iterrows():
                     c1, c2, c3, c4 = st.columns([3, 1, 1, 1])
                     c1.write(f"📌 {row['作業名稱']} ({row['繳交狀態']})")
@@ -209,11 +207,10 @@ if menu == "🔍 學生查詢":
                         c3.button("需改", key=f"qr_{idx}", on_click=update_val, args=(idx, "需訂正"))
             
             with st.expander("查看已完成項目"):
-                # 這裡顯示非 未繳交 且 非 需訂正 的項目
                 done = res[~res["繳交狀態"].str.strip().isin(["未繳交", "需訂正"])]
                 st.table(done[["作業名稱", "更新日期"]])
 
-# --- 老師後台介面 ---
+# --- 老師後台 ---
 elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("請先輸入密碼。")
@@ -235,7 +232,8 @@ elif menu == "🛠️ 老師後台":
         with t2:
             tsid = st.text_input("快速補交座號：")
             if tsid:
-                sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"].str.strip().isin(["未繳交", "需訂正"])]
+                # 修復這裡的語法錯誤
+                sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"].str.strip().isin(["未繳交", "需訂正"]))]
                 if sm.empty:
                     st.info("該生目前沒有欠交作業。")
                 else:
@@ -252,7 +250,8 @@ elif menu == "🛠️ 老師後台":
                 new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_l)], ignore_index=True)
                 if save_to_cloud(new_df):
                     st.success(f"已發佈 {name}")
-                    time.sleep(1); st.rerun()
+                    time.sleep(1)
+                    st.rerun()
 
         st.divider()
         with st.expander("🗑️ 刪除紀錄"):
