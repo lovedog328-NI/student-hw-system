@@ -193,4 +193,91 @@ is_admin = (pwd == "alice")
 
 if is_admin:
     st.sidebar.success("✅ 老師模式已解鎖")
-    # 老師模式下提供一個手動刷新鈕，確保抓到其他裝置剛改好的
+    # 老師模式下提供一個手動刷新鈕，確保抓到其他裝置剛改好的資料
+    if st.sidebar.button("🔄 同步最新雲端資料"):
+        st.session_state.main_df = load_latest_data()
+        st.rerun()
+
+menu = st.sidebar.selectbox("選單", ["🔍 學生查詢", "🛠️ 老師後台"])
+
+def update_status(idx, status):
+    st.session_state.main_df.at[idx, "繳交狀態"] = status
+    st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
+    save_and_sync(st.session_state.main_df)
+
+if menu == "🔍 學生查詢":
+    sid = st.text_input("輸入座號查詢：")
+    if sid:
+        # 學生查詢時，也悄悄讀取一次最新資料
+        st.session_state.main_df = load_latest_data()
+        res = st.session_state.main_df[st.session_state.main_df["座號"] == str(sid)]
+        if not res.empty:
+            st.subheader(f"👤 {res.iloc[0]['姓名']} 的作業狀況")
+            todo = res[res["繳交狀態"] != "已繳交"]
+            if todo.empty: st.success("🎉 全部交齊囉！")
+            for idx, row in todo.iterrows():
+                c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
+                c1.write(f"📌 {row['作業名稱']}")
+                c2.write(f"`{row['繳交狀態']}`")
+                if is_admin:
+                    c3.button("已交", key=f"q_{idx}", on_click=update_status, args=(idx, "已繳交"))
+                    c4.button("訂正", key=f"qr_{idx}", on_click=update_status, args=(idx, "需訂正"))
+            with st.expander("查看已完成項目"):
+                st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
+
+elif menu == "🛠️ 老師後台":
+    if not is_admin:
+        st.warning("請先輸入密碼")
+    else:
+        # 進入後台時，強制抓一次最新資料
+        if 'last_load' not in st.session_state:
+             st.session_state.main_df = load_latest_data()
+             st.session_state.last_load = True
+
+        t1, t2, t3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
+        
+        with t1:
+            hws = st.session_state.main_df["作業名稱"].unique()
+            sel_hw = st.selectbox("選擇作業", ["請選擇"] + list(hws))
+            if sel_hw != "請選擇":
+                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel_hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if m.empty: st.success("🎉 全班都交齊了！")
+                for i, r in m.iterrows():
+                    ca, cb, cc = st.columns([3, 1, 1])
+                    ca.write(f"**{r['座號']}. {r['姓名']}**")
+                    cb.button("已交", key=f"t1_{i}", on_click=update_status, args=(i, "已繳交"))
+                    cc.button("訂正", key=f"t1r_{i}", on_click=update_status, args=(i, "需訂正"))
+
+        with t2:
+            tsid = st.text_input("快速補交座號：", key="t2sid")
+            if tsid:
+                sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if sm.empty: st.info("無欠交紀錄。")
+                else:
+                    for i, r in sm.iterrows():
+                        ra, rb, rc = st.columns([3, 1, 1])
+                        ra.write(f"📌 {r['作業名稱']} ({r['繳交狀態']})")
+                        rb.button("✅ 已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                        rc.button("✏️ 訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
+
+        with t3:
+            st.subheader("📝 新增整班作業")
+            new_hw = st.text_input("輸入名稱：")
+            if new_hw:
+                if st.button("🚀 點此發佈新作業"):
+                    new_list = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":new_hw, "繳交狀態":"未繳交", "更新日期":str(date.today())} for s in STUDENT_LIST]
+                    new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_list)], ignore_index=True)
+                    save_and_sync(new_df)
+                    st.success(f"已發佈 {new_hw}")
+                    time.sleep(1); st.rerun()
+
+        st.divider()
+        with st.expander("🗑️ 刪除紀錄"):
+            all_hws = st.session_state.main_df["作業名稱"].unique()
+            target_del = st.selectbox("選擇要刪除的作業：", ["請選擇"] + list(all_hws))
+            confirm_del = st.checkbox("確認刪除")
+            if st.button("❌ 執行刪除"):
+                if target_del != "請選擇" and confirm_del:
+                    new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target_del]
+                    save_and_sync(new_df)
+                    st.rerun()
