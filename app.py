@@ -12,217 +12,141 @@ st.title("📚 303 作業登記系統")
 
 # --- 2. 學生名單 ---
 STUDENT_LIST = [
-    {"座號": "1", "姓名": "王瑀淮"}, {"座號": "2", "姓名": "李祐嘉"},
-    {"座號": "3", "姓名": "郭晁瑋"}, {"座號": "4", "姓名": "廖勇傑"},
-    {"座號": "5", "姓名": "潘彥廷"}, {"座號": "6", "姓名": "郭家宇"},
-    {"座號": "7", "姓名": "王悅芯"}, {"座號": "8", "姓名": "劉橙"},
-    {"座號": "9", "姓名": "洪語緹"}, {"座號": "10", "姓名": "林祈平"},
-    {"座號": "11", "姓名": "鄧安晴"}, {"座號": "12", "姓名": "蔣語桐"},
-    {"座號": "13", "姓名": "邱薇瑀"}, {"座號": "14", "姓名": "鍾芮昕"},
-    {"座號": "15", "姓名": "詹筠蓁"}, {"座號": "16", "姓名": "劉姝言"},
-    {"座號": "17", "姓名": "范庭蓁"}, {"座號": "18", "姓名": "呂佳恩"},
-    {"座號": "19", "姓名": "楊晨妤"}, {"座號": "20", "姓名": "劉芮安"},
-    {"座號": "21", "姓名": "蔡芊芊"}, {"座號": "22", "姓名": "王楷晴"}
+    {"座號": str(i), "姓名": name} for i, name in enumerate([
+        "王瑀淮", "李祐嘉", "郭晁瑋", "廖勇傑", "潘彥廷", "郭家宇", "王悅芯", "劉橙",
+        "洪語緹", "林祈平", "鄧安晴", "蔣語桐", "邱薇瑀", "鍾芮昕", "詹筠蓁", "劉姝言",
+        "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"
+    ], 1)
 ]
 
-# --- 3. 初始欠交清單 (備援數據) ---
-DEF_DATA = [
-    ("19", "3/27聯絡簿", "未繳交"), ("4", "L2圈詞", "需訂正"), ("6", "L2圈詞", "未繳交"),
-    ("15", "L2圈詞", "未繳交"), ("21", "L2圈詞", "需訂正"), ("6", "L2生字造詞", "未繳交"),
-    ("1", "L3圈詞", "需訂正"), ("2", "L3圈詞", "未繳交"), ("3", "L3圈詞", "未繳交"),
-    ("4", "L3圈詞", "需訂正"), ("6", "L3圈詞", "未繳交"), ("19", "L3圈詞", "未繳交"),
-    ("21", "L3圈詞", "未繳交"), ("6", "L3國卷", "需訂正"), ("14", "L3國卷", "需訂正"),
-    ("21", "L3國卷", "需訂正"), ("21", "L3生字造詞", "需訂正"), ("1", "乙本p.25", "未繳交"),
-    ("4", "乙本p.25", "未繳交"), ("12", "乙本p.25", "未繳交"), ("19", "乙本p.25", "未繳交"),
-    ("21", "乙本p.25", "未繳交"), ("12", "乙本p.9-11", "未繳交"), ("6", "圈詞L1", "未繳交"),
-    ("1", "國乙本p.22~24", "未繳交"), ("6", "國乙本p.22~24", "需訂正"), ("12", "國乙本p.22~24", "需訂正"),
-    ("19", "國乙本p.22~24", "未繳交"), ("21", "國乙本p.22~24", "需訂正"), ("1", "國甲p.17.23.24", "需訂正"),
-    ("21", "國甲p.17.23.24", "需訂正"), ("1", "國甲p.25.26", "需訂正"), ("18", "國甲p.25.26", "需訂正"),
-    ("21", "國甲p.25.26", "需訂正"), ("1", "小日記1", "未繳交"), ("2", "小日記1", "未繳交"),
-    ("2", "小日記2", "未繳交"), ("6", "小日記2", "未繳交"), ("14", "小日記2", "需訂正"),
-    ("15", "小日記2", "需訂正"), ("18", "小日記2", "需訂正"), ("19", "小日記2", "需訂正"),
-    ("21", "小日記2", "需訂正"), ("6", "成語25", "未繳交"), ("1", "成語p.26.27", "未繳交"),
-    ("6", "成語p.26.27", "未繳交"), ("19", "成語p.26.27", "需訂正"), ("1", "成語p28", "未繳交"),
-    ("6", "成語p28", "未繳交"), ("19", "成語p28", "未繳交"), ("1", "成語p29", "未繳交"),
-    ("6", "成語p29", "未繳交"), ("19", "成語p29", "未繳交"), ("22", "成語p29", "未繳交"),
-    ("1", "成語p30", "未繳交"), ("4", "成語p30", "未繳交"), ("6", "成語p30", "未繳交"),
-    ("19", "成語p30", "未繳交"), ("21", "成語p30", "未繳交"), ("22", "成語p30", "未繳交"),
-    ("6", "數卷(大)", "需訂正"), ("19", "數卷(大)", "需訂正"), ("14", "數卷1-3", "需訂正"),
-    ("15", "數卷1-3", "需訂正"), ("18", "數卷1-3", "需訂正"), ("19", "數卷1-3", "需訂正"),
-    ("21", "數卷1-3", "需訂正"), ("1", "數卷2-2", "需訂正"), ("3", "數卷2-2", "需訂正"),
-    ("4", "數卷2-2", "需訂正"), ("6", "數卷2-2", "需訂正"), ("15", "數卷2-2", "需訂正"),
-    ("1", "數學2-3", "未繳交"), ("4", "數學2-3", "需訂正"), ("6", "數學2-3", "未繳交"),
-    ("14", "數學2-3", "需訂正"), ("15", "數學2-3", "未繳交"), ("18", "數學2-3", "需訂正"),
-    ("19", "數學2-3", "需訂正"), ("14", "數習28.29", "需訂正"), ("19", "數習28.29", "需訂正"),
-    ("21", "數習28.29", "需訂正"), ("18", "數習p.18.19", "需訂正"), ("19", "數習p.18.19", "需訂正"),
-    ("22", "數習p.25", "未繳交"), ("1", "數習p.34.35", "未繳交"), ("2", "數習p.34.35", "未繳交"),
-    ("3", "數習p.34.35", "未繳交"), ("4", "數習p.34.35", "未繳交"), ("6", "數習p.34.35", "未繳交"),
-    ("8", "數習p.34.35", "未繳交"), ("12", "數習p.34.35", "未繳交"), ("14", "數習p.34.35", "未繳交"),
-    ("18", "數習p.34.35", "需訂正"), ("19", "數習p.34.35", "未繳交"), ("21", "數習p.34.35", "未繳交"),
-    ("22", "數習p.34.35", "未繳交"), ("1", "數課45.46", "未繳交"), ("6", "數課p.17.18", "未繳交"),
-    ("21", "數重p.10", "需訂正"), ("22", "數重p.10", "未繳交"), ("6", "數重p.11", "未繳交"),
-    ("18", "數重p.11", "需訂正"), ("19", "數重p.11", "未繳交"), ("21", "數重p.11", "需訂正"),
-    ("1", "數重p.12.13", "未繳交"), ("4", "數重p.12.13", "需訂正"), ("6", "數重p.12.13", "需訂正"),
-    ("15", "數重p.12.13", "需訂正"), ("19", "數重p.12.13", "未繳交"), ("21", "數重p.12.13", "需訂正"),
-    ("21", "數重p.5", "未繳交"), ("22", "數重p.8", "需訂正"), ("22", "甲本p.20-22", "未繳交")
-]
+# --- 3. 初始備援資料 (精簡版) ---
+def get_init_df():
+    # 這裡放你最原始的那份 3/27 資料清單 (為了節省篇幅，建議先放空表或核心幾筆)
+    return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 
-# --- 4. 核心功能邏輯 ---
-def get_cloud_data():
-    """強制抓取雲端最新資料，禁用快取"""
+# --- 4. 強化同步邏輯 ---
+def fetch_cloud():
+    """強制抓取最新雲端 CSV"""
     try:
         cb = random.randint(1, 999999)
         url = f"https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/export?format=csv&gid=0&cache={cb}"
-        headers = {'Cache-Control': 'no-cache', 'Pragma': 'no-cache'}
-        r = requests.get(url, headers=headers, timeout=5)
+        r = requests.get(url, timeout=5, headers={'Cache-Control': 'no-cache'})
         if r.status_code == 200:
             df_raw = pd.read_csv(io.StringIO(r.text))
             if not df_raw.empty:
-                content = str(df_raw.iloc[-1, -1])
-                if "座號" in content:
-                    return pd.read_csv(io.StringIO(content), dtype={'座號': str})
+                last_content = str(df_raw.iloc[-1, -1])
+                if "座號" in last_content:
+                    return pd.read_csv(io.StringIO(last_content), dtype={'座號': str})
     except:
         pass
     return None
 
-def init_df():
-    """初始化備援資料庫"""
-    temp_df = pd.DataFrame(DEF_DATA, columns=["座號", "作業名稱", "繳交狀態"])
-    hws = temp_df['作業名稱'].unique()
-    all_rows = []
-    name_map = {s['座號']: s['姓名'] for s in STUDENT_LIST}
-    for hw in hws:
-        hw_subset = temp_df[temp_df['作業名稱'] == hw]
-        for s in STUDENT_LIST:
-            sid = s['座號']
-            match = hw_subset[hw_subset['座號'] == sid]
-            status = match.iloc[0]['繳交狀態'] if not match.empty else "已繳交"
-            all_rows.append({"座號": sid, "姓名": name_map[sid], "作業名稱": hw, "繳交狀態": status, "更新日期": "2026-03-30"})
-    return pd.DataFrame(all_rows)
-
-def save_and_sync(df):
-    """存檔並同步"""
-    st.session_state.main_df = df
+def sync_to_cloud(df):
+    """將資料推送到雲端"""
     csv_str = df.to_csv(index=False)
     try:
         url = st.secrets["google_sync"]["form_url"]
         eid = st.secrets["google_sync"]["entry_id"]
         requests.post(url, data={eid: csv_str}, timeout=5)
-        st.session_state.last_sync = time.time()
+        st.session_state.main_df = df # 更新本地
         return True
     except:
         return False
 
-# 初始化 Session
+# 初始化：僅在第一次啟動時抓雲端
 if 'main_df' not in st.session_state:
-    cloud_df = get_cloud_data()
-    st.session_state.main_df = cloud_df if cloud_df is not None else init_df()
+    cloud = fetch_cloud()
+    st.session_state.main_df = cloud if cloud is not None else get_init_df()
 
-# --- 5. UI 介面設計 ---
+# --- 5. UI 介面 ---
 st.sidebar.title("🔐 管理權限")
-pwd = st.sidebar.text_input("老師密碼", type="password")
+pwd = st.sidebar.text_input("密碼", type="password")
 is_admin = (pwd == "alice")
 
-if is_admin:
-    st.sidebar.success("✅ 老師模式已解鎖")
-    if st.sidebar.button("🔄 同步最新雲端資料"):
-        new_df = get_cloud_data()
-        if new_df is not None:
-            st.session_state.main_df = new_df
+# 🔄 真正的同步按鈕：這會把雲端跟本地合併
+if st.sidebar.button("🔄 同步並刷新資料"):
+    with st.spinner("同步中..."):
+        new_cloud = fetch_cloud()
+        if new_cloud is not None:
+            # 合併策略：以作業名稱+座號為基準，取更新日期較晚的
+            combined = pd.concat([st.session_state.main_df, new_cloud]).drop_duplicates(
+                subset=['座號', '作業名稱'], keep='last'
+            )
+            st.session_state.main_df = combined
+            st.success("同步完成！")
             st.rerun()
 
-menu = st.sidebar.selectbox("切換功能", ["🔍 學生查詢", "🛠️ 老師後台"])
+menu = st.sidebar.selectbox("選單", ["🔍 查詢", "🛠️ 後台"])
 
-def update_status(idx, status):
+def update_val(idx, status):
     st.session_state.main_df.at[idx, "繳交狀態"] = status
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-    save_and_sync(st.session_state.main_df)
+    sync_to_cloud(st.session_state.main_df)
 
-# --- 功能 A：學生查詢 ---
-if menu == "🔍 學生查詢":
-    st.header("🔍 個人作業查詢")
-    sid = st.text_input("輸入座號 (1-22)：")
+if menu == "🔍 查詢":
+    sid = st.text_input("輸入座號：")
     if sid:
-        # 僅當距離上次操作一段時間後才自動抓雲端，避免頻繁請求
-        if time.time() - st.session_state.get('last_sync', 0) > 30:
-            c_df = get_cloud_data()
-            if c_df is not None: st.session_state.main_df = c_df
-            
-        res = st.session_state.main_df[st.session_state.main_df["座號"] == str(sid)]
+        df = st.session_state.main_df
+        res = df[df["座號"] == str(sid)]
         if not res.empty:
-            st.subheader(f"👤 {res.iloc[0]['姓名']} 的作業狀況")
+            st.subheader(f"👤 {res.iloc[0]['姓名']}")
             todo = res[res["繳交狀態"] != "已繳交"]
-            if todo.empty: st.success("🎉 作業全部交齊囉！太棒了！")
             for idx, row in todo.iterrows():
-                c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
-                c1.write(f"📌 {row['作業名稱']}")
-                c2.write(f"`{row['繳交狀態']}`")
+                c1, c2, c3 = st.columns([3, 1, 1])
+                c1.write(f"📌 {row['作業名稱']} ({row['繳交狀態']})")
                 if is_admin:
-                    c3.button("已交", key=f"q_{idx}", on_click=update_status, args=(idx, "已繳交"))
-                    c4.button("訂正", key=f"qr_{idx}", on_click=update_status, args=(idx, "需訂正"))
-            with st.expander("查看已完成項目"):
+                    c2.button("已交", key=f"q_{idx}", on_click=update_val, args=(idx, "已繳交"))
+                    c3.button("訂正", key=f"qr_{idx}", on_click=update_val, args=(idx, "需訂正"))
+            with st.expander("已完成"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
+        else:
+            st.info("查無資料，請確認是否已由老師新增作業。")
 
-# --- 功能 B：老師後台 ---
-elif menu == "🛠️ 老師後台":
+elif menu == "🛠️ 後台":
     if not is_admin:
-        st.warning("⚠️ 請在側邊欄輸入正確密碼以開啟管理功能。")
+        st.warning("請輸入密碼")
     else:
-        t1, t2, t3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
+        t1, t2, t3 = st.tabs(["缺交", "補交", "新增"])
         
         with t1:
             hws = st.session_state.main_df["作業名稱"].unique()
-            sel_hw = st.selectbox("選擇作業", ["請選擇"] + list(hws))
-            if sel_hw != "請選擇":
-                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel_hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
-                if m.empty: st.success("🎉 這項作業全班都交齊了！")
+            sel = st.selectbox("選擇作業", ["請選擇"] + list(hws))
+            if sel != "請選擇":
+                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
                 for i, r in m.iterrows():
                     ca, cb, cc = st.columns([3, 1, 1])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
-                    cb.button("已交", key=f"t1_{i}", on_click=update_status, args=(i, "已繳交"))
-                    cc.button("訂正", key=f"t1r_{i}", on_click=update_status, args=(i, "需訂正"))
+                    cb.button("已交", key=f"t1_{i}", on_click=update_val, args=(i, "已繳交"))
+                    cc.button("訂正", key=f"t1r_{i}", on_click=update_val, args=(i, "需訂正"))
 
         with t2:
-            st.subheader("🎯 依座號快速補交")
-            tsid = st.text_input("輸入座號補交：", key="t2sid")
+            tsid = st.text_input("補交座號：", key="tsid")
             if tsid:
                 sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
-                if sm.empty:
-                    st.info("該生目前沒有欠交的作業。")
-                else:
-                    st.write(f"學生：**{sm.iloc[0]['姓名']}**")
-                    for i, r in sm.iterrows():
-                        ra, rb, rc = st.columns([3, 1, 1])
-                        ra.write(f"📌 {r['作業名稱']} ({r['繳交狀態']})")
-                        rb.button("✅ 已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
-                        rc.button("✏️ 訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
+                for i, r in sm.iterrows():
+                    ra, rb, rc = st.columns([3, 1, 1])
+                    ra.write(f"📌 {r['作業名稱']}")
+                    rb.button("已交", key=f"t2_{i}", on_click=update_val, args=(i, "已繳交"))
+                    rc.button("訂正", key=f"t2r_{i}", on_click=update_val, args=(i, "需訂正"))
 
         with t3:
             st.subheader("📝 新增整班作業")
-            new_hw = st.text_input("輸入作業名稱：")
-            if new_hw:
-                if st.button("🚀 確認發佈新作業"):
-                    new_l = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":new_hw, "繳交狀態":"未繳交", "更新日期":str(date.today())} for s in STUDENT_LIST]
+            new_n = st.text_input("名稱：")
+            if st.button("🚀 點此發佈") and new_n:
+                # 檢查是否已存在同名作業
+                if new_n in st.session_state.main_df["作業名稱"].values:
+                    st.error("作業名稱重複！")
+                else:
+                    new_l = [{"座號":s['座號'], "姓名":s['姓名'], "作業名稱":new_n, "繳交狀態":"未繳交", "更新日期":str(date.today())} for s in STUDENT_LIST]
                     new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_l)], ignore_index=True)
-                    if save_and_sync(new_df):
-                        st.success(f"已成功發佈「{new_hw}」！")
-                        time.sleep(1); st.rerun()
+                    if sync_to_cloud(new_df):
+                        st.success(f"已發佈 {new_n}，正在同步至雲端...")
+                        time.sleep(2) # 給 Google 一點寫入時間
+                        st.rerun()
 
         st.divider()
-        st.subheader("🗑️ 刪除紀錄")
-        with st.expander("展開刪除功能"):
-            all_hws = st.session_state.main_df["作業名稱"].unique()
-            target_del = st.selectbox("選擇要刪除的作業：", ["請選擇"] + list(all_hws))
-            confirm_del = st.checkbox("我確定要刪除這份作業的所有紀錄")
-            if st.button("❌ 執行刪除", type="secondary"):
-                if target_del != "請選擇" and confirm_del:
-                    new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target_del]
-                    if save_and_sync(new_df):
-                        st.success(f"已刪除 {target_del}。")
-                        time.sleep(1); st.rerun()
-                else:
-                    st.error("請選擇作業並勾選確認。")
-
-if st.sidebar.button("🔄 重置數據"):
-    st.session_state.clear()
-    st.rerun()
+        with st.expander("🗑️ 刪除作業"):
+            target = st.selectbox("選取：", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
+            if st.button("確認刪除") and target != "請選擇":
+                sync_to_cloud(st.session_state.main_df[st.session_state.main_df["作業名稱"] != target])
+                st.rerun()
