@@ -5,7 +5,7 @@ import io
 from datetime import date
 import time
 
-st.set_page_config(page_title="303作業登記-最終修正版", layout="wide")
+st.set_page_config(page_title="303作業登記-防錯強化版", layout="wide")
 
 # --- 1. 固定學生名單 ---
 STUDENT_LIST = [
@@ -22,30 +22,30 @@ STUDENT_LIST = [
     {"座號": "21", "姓名": "蔡芊芊"}, {"座號": "22", "姓名": "王楷晴"}
 ]
 
-# --- 2. 核心邏輯：極速讀寫 ---
+# --- 2. 核心邏輯：穩健讀寫 ---
 def load_data():
     try:
-        # 使用 export 格式通常比 gviz 更快反映最新變動
         base_url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/export?format=csv"
-        # 加入隨機參數破解 Google 伺服器緩存
         full_url = f"{base_url}&cachebust={int(time.time())}"
         r = requests.get(full_url, timeout=5)
         if r.status_code == 200:
             df_raw = pd.read_csv(io.StringIO(r.text))
             if not df_raw.empty:
-                # 取得最後一列的資料內容 (我們的機制是將完整資料存於最後一格)
-                last_cell_content = df_raw.iloc[-1, -1]
-                df = pd.read_csv(io.StringIO(last_cell_content), dtype={'座號': str})
-                # 排序
-                df['座號_int'] = pd.to_numeric(df['座號'], errors='coerce')
-                df = df.sort_values(by=["作業名稱", "座號_int"]).drop(columns=['座號_int'])
-                return df.reset_index(drop=True)
+                # 從最後一列往前找，直到找到包含「座號」字眼的正確資料
+                for i in range(len(df_raw)-1, -1, -1):
+                    last_cell = str(df_raw.iloc[i, -1])
+                    if "座號" in last_cell and "姓名" in last_cell:
+                        df = pd.read_csv(io.StringIO(last_cell), dtype={'座號': str})
+                        # 確保必要的欄位都存在
+                        if all(col in df.columns for col in ["座號", "作業名稱", "繳交狀態"]):
+                            df['座號_int'] = pd.to_numeric(df['座號'], errors='coerce')
+                            df = df.sort_values(by=["作業名稱", "座號_int"]).drop(columns=['座號_int'])
+                            return df.reset_index(drop=True)
     except Exception as e:
         st.sidebar.error(f"讀取異常: {e}")
     return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 
 def save_and_sync(df):
-    """同步 UI 與雲端"""
     st.session_state.main_df = df
     try:
         csv_str = df.to_csv(index=False)
@@ -56,7 +56,6 @@ def save_and_sync(df):
     except:
         return False
 
-# 初始化
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 
@@ -72,15 +71,15 @@ if is_admin:
 
 menu = st.sidebar.selectbox("切換功能", ["🔍 查詢與修改", "🛠️ 管理後台"])
 
-# 狀態更新回呼
-def on_status_click(idx, status):
+# 狀態更新函式
+def update_item(idx, status):
     st.session_state.main_df.at[idx, "繳交狀態"] = status
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
     save_and_sync(st.session_state.main_df)
 
 if menu == "🔍 查詢與修改":
     st.header("🔍 學生個人作業查詢")
-    sid = st.text_input("輸入座號 (1-22)：")
+    sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
         df = st.session_state.main_df
         res = df[df["座號"].astype(str) == str(sid)]
@@ -95,14 +94,16 @@ if menu == "🔍 查詢與修改":
                     c1.write(f"📌 {row['作業名稱']}")
                     c2.write(f"`{row['繳交狀態']}`")
                     if is_admin:
-                        c3.button("已交", key=f"q_d_{idx}", on_click=on_status_click, args=(idx, "已繳交"))
-                        c4.button("訂正", key=f"q_r_{idx}", on_click=on_status_click, args=(idx, "需訂正"))
+                        c3.button("已交", key=f"q_d_{idx}", on_click=update_item, args=(idx, "已繳交"))
+                        c4.button("訂正", key=f"q_r_{idx}", on_click=update_item, args=(idx, "需訂正"))
             with st.expander("查看已完成項目"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
+        else:
+            st.info("尚無該座號的登記資料。")
 
 elif menu == "🛠️ 管理後台":
     if not is_admin:
-        st.warning("請在左側輸入密碼。")
+        st.warning("請在側邊欄輸入密碼。")
     else:
         t1, t2, t3 = st.tabs(["📋 缺交名單", "🎯 座號補交", "📝 新增作業"])
         
@@ -114,24 +115,24 @@ elif menu == "🛠️ 管理後台":
                 for i, r in m.iterrows():
                     col1, col2, col3 = st.columns([3, 1, 1])
                     col1.write(f"**{r['座號']}. {r['姓名']}** ({r['繳交狀態']})")
-                    col2.button("已交", key=f"t1_d_{i}", on_click=on_status_click, args=(i, "已繳交"))
-                    col3.button("訂正", key=f"t1_r_{i}", on_click=on_status_click, args=(i, "需訂正"))
+                    col2.button("已交", key=f"t1_d_{i}", on_click=update_item, args=(i, "已繳交"))
+                    col3.button("訂正", key=f"t1_r_{i}", on_click=update_item, args=(i, "需訂正"))
         
         with t2:
-            tsid = st.text_input("輸入座號快速補交：", key="t2_sid")
+            tsid = st.text_input("輸入座號補交：", key="t2_sid")
             if tsid:
                 sm = st.session_state.main_df[(st.session_state.main_df["座號"].astype(str) == str(tsid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
                 for i, r in sm.iterrows():
                     ca, cb, cc = st.columns([3, 1, 1])
                     ca.write(f"📌 {r['作業名稱']} ({r['繳交狀態']})")
-                    cb.button("已交", key=f"t2_d_{i}", on_click=on_status_click, args=(i, "已繳交"))
-                    cc.button("訂正", key=f"t2_r_{i}", on_click=on_status_click, args=(i, "需訂正"))
+                    cb.button("已交", key=f"t2_d_{i}", on_click=update_item, args=(i, "已繳交"))
+                    cc.button("訂正", key=f"t2_r_{i}", on_click=update_item, args=(i, "需訂正"))
 
         with t3:
             if 'hw_name' not in st.session_state: st.session_state.hw_name = ""
             hw_n = st.text_input("新作業名稱：", value=st.session_state.hw_name)
             if hw_n:
-                if 'tmp' not in st.session_state or st.session_state.lhwn != hw_n:
+                if 'tmp' not in st.session_state or st.session_state.get('lhwn') != hw_n:
                     st.session_state.tmp = {s['座號']: "未繳交" for s in STUDENT_LIST}
                     st.session_state.lhwn = hw_n
                 cols = st.columns(3)
@@ -156,6 +157,6 @@ elif menu == "🛠️ 管理後台":
                 save_and_sync(st.session_state.main_df[st.session_state.main_df["作業名稱"] != target])
                 st.rerun()
 
-        if st.sidebar.button("🔄 強制刷新雲端數據"):
+        if st.sidebar.button("🔄 強制刷新"):
             st.session_state.main_df = load_data()
             st.rerun()
