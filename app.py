@@ -199,10 +199,15 @@ def get_rescue_data():
 # --- 3. 核心資料邏輯 ---
 def load_latest_data():
     try:
-        url = f"https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/export?format=csv&t={int(time.time())}"
+        # 加上 t=時間戳記，確保 Google 雲端不會回傳舊快取
+        # 這是解決「資料過一陣子變回去」的最關鍵代碼
+        timestamp = int(time.time())
+        url = f"https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/export?format=csv&t={timestamp}"
+        
         r = requests.get(url, timeout=10)
         if r.status_code == 200:
             df_raw = pd.read_csv(io.StringIO(r.text))
+            # ... (後續解析邏輯不變)
             if not df_raw.empty:
                 for i in range(len(df_raw)-1, -1, -1):
                     content = str(df_raw.iloc[i, -1])
