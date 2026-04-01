@@ -73,12 +73,76 @@ spreadsheet="https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJ
         return True
     except Exception as e:
         st.error(f"儲存失敗，請檢查網路: {e}")
+        return Falsedef load_data():
+    """從 Google Sheets 讀取整張表，並進行清理"""
+    try:
+        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
+        df = conn.read(
+            spreadsheet=url,
+            worksheet="Sheet1",
+            ttl=0
+        )
+        if df is None or df.empty:
+            return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+        
+        df = df.dropna(how="all") 
+        if not df.empty:
+            df["座號"] = df["座號"].astype(str)
+        return df
+    except Exception as e:
+        return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+
+def save_data(df):
+    """將目前的資料完整寫回 Google Sheets"""
+    try:
+        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
+        # 💡 注意下面每一行結尾的逗號
+        conn.update(
+            spreadsheet=url,
+            worksheet="Sheet1",
+            data=df
+        )
+        return True
+    except Exception as e:
+        st.error(f"儲存失敗，請檢查網路或權限: {e}")
         return False
 
 # 初始化資料 (Session State)
 if 'main_df' not in st.session_state:
     with st.spinner("正在安全讀取雲端資料庫..."):
-        st.session_state.main_df = load_data()
+        st.session_state.main_df = load_data()def load_data():
+    """從 Google Sheets 讀取整張表，並進行清理"""
+    try:
+        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
+        df = conn.read(
+            spreadsheet=url,
+            worksheet="Sheet1",
+            ttl=0
+        )
+        if df is None or df.empty:
+            return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+        
+        df = df.dropna(how="all") 
+        if not df.empty:
+            df["座號"] = df["座號"].astype(str)
+        return df
+    except Exception as e:
+        return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+
+def save_data(df):
+    """將目前的資料完整寫回 Google Sheets"""
+    try:
+        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
+        # 💡 注意下面每一行結尾的逗號
+        conn.update(
+            spreadsheet=url,
+            worksheet="Sheet1",
+            data=df
+        )
+        return True
+    except Exception as e:
+        st.error(f"儲存失敗，請檢查網路或權限: {e}")
+        return False
 
 # --- 3. 側邊欄控制 ---
 st.sidebar.title("🔐 管理模式")
