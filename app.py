@@ -8,10 +8,11 @@ import time
 st.set_page_config(page_title="303作業登記-專業版", layout="wide")
 st.title("📚 303 作業登記系統")
 
+# 固定學生名單
 STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate(["王瑀淮", "李祐嘉", "郭晁瑋", "廖勇傑", "潘彥廷", "郭家宇", "王悅芯", "劉橙", "洪語緹", "林祈平", "鄧安晴", "蔣語桐", "邱薇瑀", "鍾芮昕", "詹筠蓁", "劉姝言", "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"], 1)]
 NAME_MAP = {s['座號']: s['姓名'] for s in STUDENT_LIST}
 
-# --- 2. 核心救援資料 (若雲端空了，會強制匯入這筆) ---
+# --- 2. 救援資料庫邏輯 ---
 def get_rescue_df():
     backup_data = [
         ["4", "L2圈詞", "需訂正", "2026-03-27"], ["6", "L2圈詞", "未繳交", "2026-03-27"],
@@ -39,19 +40,15 @@ def get_rescue_df():
         ["11", "成語34", "需訂正", "2026-04-01"], ["5", "數習41", "需訂正", "2026-04-01"],
         ["6", "數習41", "需訂正", "2026-04-01"]
     ]
-    # 建立基礎 DF，並補齊姓名與預設全班已交的其他項目
     base_df = pd.DataFrame(backup_data, columns=["座號", "作業名稱", "繳交狀態", "更新日期"])
-    hws = base_df["作業名稱"].unique()
-    
-    # 手動補上大範圍的新作業
     new_hws = [("3/31聯絡簿", "未繳交"), ("國語習作P16-17", "需訂正"), ("L4生字造詞", "未繳交"), ("L4圈詞", "未繳交"), ("國甲32-34", "未繳交"), ("成語32-33", "未繳交"), ("數習38-39", "未繳交"), ("成語34", "未繳交"), ("數習41", "未繳交")]
     
     final_rows = []
-    processed_hws = list(hws)
-    for nhw, nstatus in new_hws:
-        if nhw not in processed_hws: processed_hws.append(nhw)
+    existing_hws = base_df["作業名稱"].unique().tolist()
+    for nhw, _ in new_hws:
+        if nhw not in existing_hws: existing_hws.append(nhw)
 
-    for hw in processed_hws:
+    for hw in existing_hws:
         hw_sub = base_df[base_df["作業名稱"] == hw]
         for s in STUDENT_LIST:
             sid = s['座號']
@@ -59,9 +56,7 @@ def get_rescue_df():
             if not match.empty:
                 final_rows.append({"座號":sid, "姓名":NAME_MAP[sid], "作業名稱":hw, "繳交狀態":match.iloc[0]["繳交狀態"], "更新日期":match.iloc[0]["更新日期"]})
             else:
-                # 預設邏輯
                 status = "已繳交"
-                # 判斷是否為 3/31 後的新作業，若是，且沒在備份清單中，則依照 new_hws 的預設狀態
                 for nhw, nstatus in new_hws:
                     if hw == nhw: status = nstatus
                 final_rows.append({"座號":sid, "姓名":NAME_MAP[sid], "作業名稱":hw, "繳交狀態":status, "更新日期":"2026-04-01"})
@@ -73,22 +68,14 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data():
     rescue_df = get_rescue_df()
     try:
-        # 讀取雲端資料
         df = conn.read(worksheet="Sheet1", ttl=0)
-        
         if df is None or df.empty or len(df) < 5:
             return rescue_df
-        
-        # ✨ 關鍵修復：處理 1.0 的問題
-        # 先將 NaN 補空字串，再轉成浮點數轉整數，最後轉字串
+        # ✨ 修復 1.0 問題：轉數字 -> 去小數點 -> 轉字串
         df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
-        
-        # 排除掉剛才 fillna(0) 產生的 0 (避免出現 0 號學生)
         df = df[df["座號"] != "0"]
-        
         return df
-    except Exception as e:
-        st.error(f"讀取錯誤: {e}")
+    except:
         return rescue_df
 
 def save_data(df):
@@ -114,17 +101,17 @@ if st.sidebar.button("🔄 同步雲端/恢復初始資料"):
 
 menu = st.sidebar.radio("功能", ["🔍 學生查詢", "🛠️ 老師後台"])
 
+# ✨ 修正 Callback 警告：移除內部的 st.rerun()
 def update_status(idx, status):
     st.session_state.main_df.at[idx, "繳交狀態"] = status
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-    if save_data(st.session_state.main_df):
-        st.toast("✅ 同步成功")
-        time.sleep(0.5)
-        st.rerun()
+    with st.spinner("同步雲端中..."):
+        save_data(st.session_state.main_df)
+    st.toast(f"✅ 已更新狀態為：{status}")
 
-# 介面實作與先前版本一致... (省略重複的 UI 代碼，直接整合進去)
+# --- 5. 介面實作 ---
 if menu == "🔍 學生查詢":
-    sid = st.text_input("輸入座號 (1-22)：")
+    sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
         res = st.session_state.main_df[st.session_state.main_df["座號"] == str(sid)]
         if not res.empty:
