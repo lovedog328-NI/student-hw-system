@@ -5,8 +5,8 @@ from datetime import date
 import time
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-穩定版", layout="wide")
-st.title("📚 303 作業登記系統 (雲端同步穩定版)")
+st.set_page_config(page_title="303作業登記-救援版", layout="wide")
+st.title("📚 303 作業登記系統")
 
 # 固定學生名單
 STUDENT_LIST = [
@@ -17,124 +17,202 @@ STUDENT_LIST = [
     ], 1)
 ]
 
-# --- 2. 建立 Google Sheets 連接 ---
+# --- 2. 核心：內建初始化資料庫 (這是您的保險，萬一雲端空了會用這個) ---
+def get_internal_backup():
+    # 將您提供的 4/1 最新資料整理為清單
+    backup_list = [
+        ["4", "L2圈詞", "需訂正", "2026-03-27", "廖勇傑"], ["6", "L2圈詞", "未繳交", "2026-03-27", "郭家宇"],
+        ["15", "L2圈詞", "未繳交", "2026-03-27", "詹筠蓁"], ["21", "L2圈詞", "需訂正", "2026-03-27", "蔡芊芊"],
+        ["6", "L2生字造詞", "未繳交", "2026-03-27", "郭家宇"], ["1", "L3圈詞", "需訂正", "2026-03-27", "王瑀淮"],
+        ["2", "L3圈詞", "未繳交", "2026-03-27", "李祐嘉"], ["3", "L3圈詞", "未繳交", "2026-03-27", "郭晁瑋"],
+        ["4", "L3圈詞", "需訂正", "2026-03-27", "廖勇傑"], ["6", "L3圈詞", "未繳交", "2026-03-27", "郭家宇"],
+        ["19", "L3圈詞", "未繳交", "2026-03-27", "楊晨妤"], ["21", "L3圈詞", "需訂正", "2026-04-01", "蔡芊芊"],
+        ["6", "L3國卷", "需訂正", "2026-03-27", "郭家宇"], ["14", "L3國卷", "需訂正", "2026-03-27", "鍾芮昕"],
+        ["21", "L3國卷", "需訂正", "2026-03-27", "蔡芊芊"], ["21", "L3生字造詞", "需訂正", "2026-03-27", "蔡芊芊"],
+        ["1", "乙本p.25", "未繳交", "2026-03-27", "王瑀淮"], ["4", "乙本p.25", "未繳交", "2026-03-27", "廖勇傑"],
+        ["12", "乙本p.25", "未繳交", "2026-03-27", "蔣語桐"], ["19", "乙本p.25", "未繳交", "2026-03-27", "楊晨妤"],
+        ["21", "乙本p.25", "未繳交", "2026-03-27", "蔡芊芊"], ["12", "乙本p.9-11", "未繳交", "2026-03-27", "蔣語桐"],
+        ["6", "圈詞L1", "未繳交", "2026-03-27", "郭家宇"], ["6", "國乙本p.22-24", "需訂正", "2026-03-27", "郭家宇"],
+        ["12", "國乙本p.22-24", "需訂正", "2026-03-27", "蔣語桐"], ["19", "國乙本p.22-24", "未繳交", "2026-03-27", "楊晨妤"],
+        ["21", "國乙本p.22-24", "需訂正", "2026-03-27", "蔡芊芊"], ["21", "國甲p.17.23.24", "需訂正", "2026-03-27", "蔡芊芊"],
+        ["1", "國甲p.25.26", "需訂正", "2026-03-27", "王瑀淮"], ["18", "國甲p.25.26", "需訂正", "2026-03-27", "呂佳恩"],
+        ["21", "國甲p.25.26", "需訂正", "2026-03-27", "蔡芊芊"], ["2", "小日記1", "未繳交", "2026-03-27", "李祐嘉"],
+        ["2", "小日記2", "未繳交", "2026-03-27", "李祐嘉"], ["6", "小日記2", "未繳交", "2026-03-27", "郭家宇"],
+        ["14", "小日記2", "需訂正", "2026-03-27", "鍾芮昕"], ["15", "小日記2", "需訂正", "2026-03-27", "詹筠蓁"],
+        ["18", "小日記2", "需訂正", "2026-03-27", "呂佳恩"], ["19", "小日記2", "需訂正", "2026-03-27", "楊晨妤"],
+        ["21", "小日記2", "需訂正", "2026-03-27", "蔡芊芊"], ["6", "成語25", "未繳交", "2026-03-27", "郭家宇"],
+        ["6", "成語p.26.27", "未繳交", "2026-03-27", "郭家宇"], ["19", "成語p.26.27", "需訂正", "2026-03-27", "楊晨妤"],
+        ["6", "成語p28", "未繳交", "2026-03-27", "郭家宇"], ["1", "成語p29", "需訂正", "2026-04-01", "王瑀淮"],
+        ["6", "成語p29", "未繳交", "2026-03-27", "郭家宇"], ["19", "成語p29", "需訂正", "2026-04-01", "楊晨妤"],
+        ["22", "成語p29", "未繳交", "2026-03-27", "王楷晴"], ["4", "成語p30", "未繳交", "2026-03-27", "廖勇傑"],
+        ["6", "成語p30", "未繳交", "2026-03-27", "郭家宇"], ["22", "成語p30", "未繳交", "2026-03-27", "王楷晴"],
+        ["6", "數卷(大)", "需訂正", "2026-03-27", "郭家宇"], ["19", "數卷(大)", "需訂正", "2026-03-27", "楊晨妤"],
+        ["14", "數卷1-3", "需訂正", "2026-03-27", "鍾芮昕"], ["15", "數卷1-3", "需訂正", "2026-03-27", "詹筠蓁"],
+        ["18", "數卷1-3", "需訂正", "2026-03-27", "呂佳恩"], ["19", "數卷1-3", "需訂正", "2026-03-27", "楊晨妤"],
+        ["21", "數卷1-3", "需訂正", "2026-03-27", "蔡芊芊"], ["1", "數卷2-2", "需訂正", "2026-03-27", "王瑀淮"],
+        ["3", "數卷2-2", "需訂正", "2026-03-27", "郭晁瑋"], ["4", "數卷2-2", "需訂正", "2026-03-27", "廖勇傑"],
+        ["6", "數卷2-2", "需訂正", "2026-03-27", "郭家宇"], ["15", "數卷2-2", "需訂正", "2026-03-27", "詹筠蓁"],
+        ["1", "數學2-3", "未繳交", "2026-03-27", "王瑀淮"], ["4", "數學2-3", "需訂正", "2026-03-27", "廖勇傑"],
+        ["6", "數學2-3", "未繳交", "2026-03-27", "郭家宇"], ["14", "數學2-3", "需訂正", "2026-03-27", "鍾芮昕"],
+        ["15", "數學2-3", "未繳交", "2026-03-27", "詹筠蓁"], ["18", "數學2-3", "需訂正", "2026-03-27", "呂佳恩"],
+        ["19", "數學2-3", "需訂正", "2026-03-27", "楊晨妤"], ["14", "數習28.29", "需訂正", "2026-03-27", "鍾芮昕"],
+        ["19", "數習28.29", "需訂正", "2026-03-27", "楊晨妤"], ["21", "數習28.29", "需訂正", "2026-03-27", "蔡芊芊"],
+        ["18", "數習p.18.19", "需訂正", "2026-03-27", "呂佳恩"], ["19", "數習p.18.19", "需訂正", "2026-03-27", "楊晨妤"],
+        ["22", "數習p.25", "未繳交", "2026-03-27", "王楷晴"], ["1", "數習p.34.35", "需訂正", "2026-04-01", "王瑀淮"],
+        ["3", "數習p.34.35", "未繳交", "2026-03-27", "郭晁瑋"], ["12", "數習p.34.35", "未繳交", "2026-03-27", "蔣語桐"],
+        ["18", "數習p.34.35", "需訂正", "2026-03-30", "呂佳恩"], ["19", "數習p.34.35", "未繳交", "2026-03-27", "楊晨妤"],
+        ["21", "數習p.34.35", "未繳交", "2026-03-27", "蔡芊芊"], ["22", "數習p.34.35", "未繳交", "2026-03-27", "王楷晴"],
+        ["1", "數課45.46", "未繳交", "2026-03-27", "王瑀淮"], ["6", "數課p.17.18", "未繳交", "2026-03-27", "郭家宇"],
+        ["21", "數重p.10", "需訂正", "2026-03-27", "蔡芊芊"], ["22", "數重p.10", "未繳交", "2026-03-27", "王楷晴"],
+        ["6", "數重p.11", "未繳交", "2026-03-27", "郭家宇"], ["18", "數重p.11", "需訂正", "2026-03-27", "呂佳恩"],
+        ["19", "數重p.11", "未繳交", "2026-03-27", "楊晨妤"], ["21", "數重p.11", "需訂正", "2026-03-27", "蔡芊芊"],
+        ["1", "數重p.12.13", "未繳交", "2026-03-27", "王瑀淮"], ["4", "數重p.12.13", "需訂正", "2026-03-27", "廖勇傑"],
+        ["6", "數重p.12.13", "需訂正", "2026-03-27", "郭家宇"], ["15", "數重p.12.13", "需訂正", "2026-03-27", "詹筠蓁"],
+        ["19", "數重p.12.13", "未繳交", "2026-03-27", "楊晨妤"], ["21", "數重p.12.13", "需訂正", "2026-03-27", "蔡芊芊"],
+        ["21", "數重p.5", "未繳交", "2026-03-27", "蔡芊芊"], ["22", "數重p.8", "需訂正", "2026-03-27", "王楷晴"],
+        ["22", "甲本p.20-22", "未繳交", "2026-03-27", "王楷晴"], ["14", "3/31聯絡簿", "未繳交", "2026-03-31", "鍾芮昕"],
+        ["19", "成語32-33", "需訂正", "2026-04-01", "楊晨妤"], ["12", "數習38-39", "未繳交", "2026-03-31", "蔣語桐"],
+        ["14", "數習38-39", "未繳交", "2026-03-31", "鍾芮昕"], ["19", "數習38-39", "未繳交", "2026-03-31", "楊晨妤"],
+        ["5", "成語34", "需訂正", "2026-04-01", "潘彥廷"], ["6", "成語34", "未繳交", "2026-04-01", "郭家宇"],
+        ["11", "成語34", "需訂正", "2026-04-01", "鄧安晴"], ["14", "成語34", "未繳交", "2026-04-01", "鍾芮昕"],
+        ["1", "數習41", "未繳交", "2026-04-01", "王瑀淮"], ["5", "數習41", "需訂正", "2026-04-01", "潘彥廷"],
+        ["6", "數習41", "需訂正", "2026-04-01", "郭家宇"], ["8", "數習41", "未繳交", "2026-04-01", "劉橙"],
+        ["14", "數習41", "未繳交", "2026-04-01", "鍾芮昕"], ["19", "數習41", "未繳交", "2026-04-01", "楊晨妤"]
+    ]
+    # 建立 4/1 批次未交/需訂正的完整資料
+    # 將有提到的轉為已有的基礎表
+    base_df = pd.DataFrame(backup_list, columns=["座號", "作業名稱", "繳交狀態", "更新日期", "姓名"])
+    
+    # 定義需要「全班生成」的新作業與預設狀態
+    new_batch = [
+        ("3/31聯絡簿", "未繳交"), ("國語習作P16-17", "需訂正"), ("L4生字造詞", "未繳交"),
+        ("L4圈詞", "未繳交"), ("國甲32-34", "未繳交"), ("成語32-33", "未繳交")
+    ]
+    
+    final_rows = []
+    name_map = {s['座號']: s['姓名'] for s in STUDENT_LIST}
+    
+    # 處理所有出現在基礎表的作業
+    for hw in base_df["作業名稱"].unique():
+        sub = base_df[base_df["作業名稱"] == hw]
+        for s in STUDENT_LIST:
+            sid = s['座號']
+            match = sub[sub["座號"] == sid]
+            if not match.empty:
+                final_rows.append(match.iloc[0].to_dict())
+            else:
+                # 基礎表沒提到該生，預設為已繳交
+                final_rows.append({"座號":sid, "姓名":name_map[sid], "作業名稱":hw, "繳交狀態":"已繳交", "更新日期":"2026-03-31"})
+
+    # 處理新批次作業 (若沒在基礎表中出現過的)
+    for hw_name, default_status in new_batch:
+        if hw_name in base_df["作業名稱"].unique(): continue
+        for s in STUDENT_LIST:
+            sid = s['座號']
+            # 特殊邏輯處理 (若有特殊已交者可以在此排除)
+            status = default_status
+            if hw_name == "L4圈詞" and sid == "21": status = "需訂正"
+            
+            final_rows.append({"座號":sid, "姓名":name_map[sid], "作業名稱":hw_name, "繳交狀態":status, "更新日期":"2026-04-01"})
+
+    return pd.DataFrame(final_rows)
+
+# --- 3. 讀寫邏輯 (連接 Google Sheets) ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    """從 Google Sheets 讀取整張表，並進行清理"""
     try:
         url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-        df = conn.read(
-            spreadsheet=url,
-            worksheet="Sheet1",
-            ttl=0
-        )
-        if df is None or df.empty:
-            return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+        df = conn.read(spreadsheet=url, worksheet="Sheet1", ttl=0)
+        if df is None or df.empty or len(df) < 5: # 如果讀到的是空的或太短，啟動救援
+            return get_internal_backup()
         
-        df = df.dropna(how="all") 
-        if not df.empty:
-            df["座號"] = df["座號"].astype(str)
+        df = df.dropna(how="all")
+        df["座號"] = df["座號"].astype(str)
         return df
-    except Exception as e:
-        return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+    except:
+        return get_internal_backup()
 
 def save_data(df):
-    """將目前的資料完整寫回 Google Sheets"""
     try:
         url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-        conn.update(
-            spreadsheet=url,
-            worksheet="Sheet1",
-            data=df
-        )
+        conn.update(spreadsheet=url, worksheet="Sheet1", data=df)
         return True
     except Exception as e:
-        st.error(f"儲存失敗，請檢查網路或權限: {e}")
+        st.error(f"儲存失敗: {e}")
         return False
 
-# 初始化資料 (Session State)
+# 初始化資料
 if 'main_df' not in st.session_state:
-    with st.spinner("正在安全讀取雲端資料庫..."):
-        st.session_state.main_df = load_data()
+    st.session_state.main_df = load_data()
 
-# --- 3. 側邊欄控制 ---
-st.sidebar.title("🔐 管理模式")
-pwd = st.sidebar.text_input("輸入密碼", type="password")
+# --- 4. 介面控制 ---
+st.sidebar.title("🔐 管理權限")
+pwd = st.sidebar.text_input("密碼", type="password")
 is_admin = (pwd == "alice")
 
-if st.sidebar.button("🔄 強制同步雲端"):
+if st.sidebar.button("🔄 同步雲端/恢復內建資料"):
     st.session_state.main_df = load_data()
     st.rerun()
 
 menu = st.sidebar.radio("切換功能", ["🔍 學生查詢區", "🛠️ 老師管理後台"])
 
-# 更新函式
 def update_status(idx, new_status):
     st.session_state.main_df.at[idx, "繳交狀態"] = new_status
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-    with st.spinner("正在同步至雲端..."):
-        if save_data(st.session_state.main_df):
-            st.toast("✅ 資料已安全存入雲端")
-            time.sleep(0.5)
-            st.rerun()
+    if save_data(st.session_state.main_df):
+        st.toast("✅ 已同步至雲端")
+        time.sleep(0.5)
+        st.rerun()
 
-# --- 4. 介面實作 ---
+# --- 5. 功能實作 ---
 
-# [學生查詢]
 if menu == "🔍 學生查詢區":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
         df = st.session_state.main_df
         res = df[df["座號"] == str(sid)]
-        
         if res.empty:
-            st.info("目前雲端尚無你的登記紀錄。")
+            st.info("查無資料。")
         else:
             name = res.iloc[0]['姓名']
-            st.subheader(f"👤 {name} 的作業清單")
+            st.subheader(f"👤 {name} 的作業狀況")
             unfilled = res[res["繳交狀態"] != "已繳交"]
-            
             if unfilled.empty:
                 st.balloons()
-                st.success("🎊 恭喜！目前沒有欠交作業，太棒了！")
+                st.success("🎊 太棒了！目前沒有欠交作業！")
             else:
                 for idx, row in unfilled.iterrows():
                     c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
-                    c1.write(f"📌 **{row['作業名稱']}**")
-                    c2.write(f"狀態：`{row['繳交狀態']}`")
+                    c1.write(f"📌 {row['作業名稱']}")
+                    c2.write(f"`{row['繳交狀態']}`")
                     if is_admin:
                         c3.button("已交", key=f"q_d_{idx}", on_click=update_status, args=(idx, "已繳交"))
                         c4.button("訂正", key=f"q_r_{idx}", on_click=update_status, args=(idx, "需訂正"))
-            
             with st.expander("查看已完成紀錄"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
-# [老師後台]
 elif menu == "🛠️ 老師管理後台":
     if not is_admin:
-        st.warning("⚠️ 請輸入正確密碼以進入管理模式。")
+        st.warning("請輸入正確密碼。")
     else:
         tab1, tab2, tab3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
-        
         with tab1:
-            if not st.session_state.main_df.empty:
-                hws = st.session_state.main_df["作業名稱"].unique()
-                sel = st.selectbox("選擇作業", ["請選擇"] + list(hws))
-                if sel != "請選擇":
-                    m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
-                    if m.empty: st.success("🎉 全班皆已交齊！")
-                    for i, r in m.iterrows():
-                        ca, cb, cc = st.columns([3, 1, 1])
-                        ca.write(f"**{r['座號']}. {r['姓名']}**")
-                        cb.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
-                        cc.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
-
+            hws = st.session_state.main_df["作業名稱"].unique()
+            sel = st.selectbox("選擇作業項目", ["請選擇"] + list(hws))
+            if sel != "請選擇":
+                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if m.empty: st.success("全班皆已交齊！")
+                for i, r in m.iterrows():
+                    ca, cb, cc = st.columns([3, 1, 1])
+                    ca.write(f"**{r['座號']}. {r['姓名']}**")
+                    cb.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                    cc.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
         with tab2:
-            tsid = st.text_input("快速補交 (輸入座號)：", key="tsid")
-            if tsid and not st.session_state.main_df.empty:
+            tsid = st.text_input("輸入座號補交：", key="tsid")
+            if tsid:
                 sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
-                if sm.empty: st.success("該生目前無欠交。")
+                if sm.empty: st.success("目前無欠交。")
                 else:
                     st.write(f"正在處理：**{sm.iloc[0]['姓名']}**")
                     for i, r in sm.iterrows():
@@ -142,31 +220,22 @@ elif menu == "🛠️ 老師管理後台":
                         ra.write(f"📌 {r['作業名稱']} ({r['繳交狀態']})")
                         rb.button("已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
                         rc.button("訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
-
         with tab3:
-            st.subheader("新增班級作業")
-            nhw = st.text_input("作業名稱 (例如：數習 p.42)：")
+            st.subheader("新增整班作業")
+            nhw = st.text_input("作業名稱：")
             if st.button("🚀 確認發佈 (預設全班未交)"):
-                new_rows = []
-                for s in STUDENT_LIST:
-                    new_rows.append({
-                        "座號": s['座號'], "姓名": s['姓名'],
-                        "作業名稱": nhw, "繳交狀態": "未繳交",
-                        "更新日期": str(date.today())
-                    })
+                new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "更新日期": str(date.today())} for s in STUDENT_LIST]
                 new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
-                with st.spinner("正在建立紀錄..."):
-                    if save_data(new_df):
-                        st.session_state.main_df = new_df
-                        st.success("發佈成功！")
-                        st.rerun()
+                if save_data(new_df):
+                    st.session_state.main_df = new_df
+                    st.success("發佈成功！")
+                    st.rerun()
 
         st.sidebar.divider()
-        with st.sidebar.expander("🗑️ 刪除舊作業"):
-            if not st.session_state.main_df.empty:
-                target = st.selectbox("選擇刪除項", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
-                if st.button("執行刪除") and target != "請選擇":
-                    new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
-                    if save_data(new_df):
-                        st.session_state.main_df = new_df
-                        st.rerun()
+        with st.sidebar.expander("🗑️ 刪除紀錄"):
+            target = st.selectbox("選擇刪除項", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
+            if st.button("執行刪除") and target != "請選擇":
+                new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
+                if save_data(new_df):
+                    st.session_state.main_df = new_df
+                    st.rerun()
