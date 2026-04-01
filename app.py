@@ -22,29 +22,43 @@ STUDENT_LIST = [
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    """從 Google Sheets 讀取整張表，並進行清理"""
+    """從 Google Sheets 讀取整張表"""
     try:
-        # 使用最乾淨的網址
+        # 1. 網址最後面不要包含 /edit 之後的雜質
         url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
+        
+        # 2. 注意參數之間的逗號 (,)
         df = conn.read(
             spreadsheet=url,
             worksheet="Sheet1",
             ttl=0
         )
         
-        # 檢查是否讀到空表
         if df is None or df.empty:
             return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
             
-        # 清理並確保座號是字串
-        df = df.dropna(how="all") # 刪除全空的列
+        df = df.dropna(how="all")
         if not df.empty:
             df["座號"] = df["座號"].astype(str)
         return df
     except Exception as e:
-        # 如果是初次建立或網路問題，回傳空表不崩潰
-        st.sidebar.warning("💡 提示：若雲端無資料，請先由老師後台『新增作業』。")
         return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
+
+def save_data(df):
+    """將目前的資料完整寫回 Google Sheets"""
+    try:
+        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
+        
+        # 注意這裡的參數都要對齊，且結尾都要有逗號
+        conn.update(
+            spreadsheet=url,
+            worksheet="Sheet1",
+            data=df
+        )
+        return True
+    except Exception as e:
+        st.error(f"儲存失敗: {e}")
+        return False
 
 def save_data(df):
     """將目前的資料完整寫回 Google Sheets"""
