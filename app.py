@@ -18,62 +18,9 @@ STUDENT_LIST = [
 ]
 
 # --- 2. 建立 Google Sheets 連接 ---
-# 這裡使用官方連接器，雖然慢，但讀取的是整張表，非常安全
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    """從 Google Sheets 讀取整張表"""
-    try:
-        # 1. 網址最後面不要包含 /edit 之後的雜質
-        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-        
-        # 2. 注意參數之間的逗號 (,)
-        df = conn.read(
-            spreadsheet=url,
-            worksheet="Sheet1",
-            ttl=0
-        )
-        
-        if df is None or df.empty:
-            return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
-            
-        df = df.dropna(how="all")
-        if not df.empty:
-            df["座號"] = df["座號"].astype(str)
-        return df
-    except Exception as e:
-        return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
-
-def save_data(df):
-    """將目前的資料完整寫回 Google Sheets"""
-    try:
-        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-        
-        # 注意這裡的參數都要對齊，且結尾都要有逗號
-        conn.update(
-            spreadsheet=url,
-            worksheet="Sheet1",
-            data=df
-        )
-        return True
-    except Exception as e:
-        st.error(f"儲存失敗: {e}")
-        return False
-
-def save_data(df):
-    """將目前的資料完整寫回 Google Sheets"""
-    try:
-        conn.update(
-            # 請將程式碼中這兩處的網址改為：
-spreadsheet="https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-            worksheet="Sheet1",
-            data=df
-        )
-        st.cache_data.clear() # 清除快取
-        return True
-    except Exception as e:
-        st.error(f"儲存失敗，請檢查網路: {e}")
-        return Falsedef load_data():
     """從 Google Sheets 讀取整張表，並進行清理"""
     try:
         url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
@@ -96,7 +43,6 @@ def save_data(df):
     """將目前的資料完整寫回 Google Sheets"""
     try:
         url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-        # 💡 注意下面每一行結尾的逗號
         conn.update(
             spreadsheet=url,
             worksheet="Sheet1",
@@ -110,46 +56,14 @@ def save_data(df):
 # 初始化資料 (Session State)
 if 'main_df' not in st.session_state:
     with st.spinner("正在安全讀取雲端資料庫..."):
-        st.session_state.main_df = load_data()def load_data():
-    """從 Google Sheets 讀取整張表，並進行清理"""
-    try:
-        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-        df = conn.read(
-            spreadsheet=url,
-            worksheet="Sheet1",
-            ttl=0
-        )
-        if df is None or df.empty:
-            return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
-        
-        df = df.dropna(how="all") 
-        if not df.empty:
-            df["座號"] = df["座號"].astype(str)
-        return df
-    except Exception as e:
-        return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
-
-def save_data(df):
-    """將目前的資料完整寫回 Google Sheets"""
-    try:
-        url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
-        # 💡 注意下面每一行結尾的逗號
-        conn.update(
-            spreadsheet=url,
-            worksheet="Sheet1",
-            data=df
-        )
-        return True
-    except Exception as e:
-        st.error(f"儲存失敗，請檢查網路或權限: {e}")
-        return False
+        st.session_state.main_df = load_data()
 
 # --- 3. 側邊欄控制 ---
 st.sidebar.title("🔐 管理模式")
 pwd = st.sidebar.text_input("輸入密碼", type="password")
 is_admin = (pwd == "alice")
 
-if st.sidebar.button("🔄 強制同步雲端 (資料對不上時點我)"):
+if st.sidebar.button("🔄 強制同步雲端"):
     st.session_state.main_df = load_data()
     st.rerun()
 
@@ -204,16 +118,30 @@ elif menu == "🛠️ 老師管理後台":
         tab1, tab2, tab3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
         
         with tab1:
-            hws = st.session_state.main_df["作業名稱"].unique()
-            sel = st.selectbox("選擇作業", ["請選擇"] + list(hws))
-            if sel != "請選擇":
-                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
-                if m.empty: st.success("🎉 全班皆已交齊！")
-                for i, r in m.iterrows():
-                    ca, cb, cc = st.columns([3, 1, 1])
-                    ca.write(f"**{r['座號']}. {r['姓名']}**")
-                    cb.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
-                    cc.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
+            if not st.session_state.main_df.empty:
+                hws = st.session_state.main_df["作業名稱"].unique()
+                sel = st.selectbox("選擇作業", ["請選擇"] + list(hws))
+                if sel != "請選擇":
+                    m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                    if m.empty: st.success("🎉 全班皆已交齊！")
+                    for i, r in m.iterrows():
+                        ca, cb, cc = st.columns([3, 1, 1])
+                        ca.write(f"**{r['座號']}. {r['姓名']}**")
+                        cb.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                        cc.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
+
+        with tab2:
+            tsid = st.text_input("快速補交 (輸入座號)：", key="tsid")
+            if tsid and not st.session_state.main_df.empty:
+                sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid)) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if sm.empty: st.success("該生目前無欠交。")
+                else:
+                    st.write(f"正在處理：**{sm.iloc[0]['姓名']}**")
+                    for i, r in sm.iterrows():
+                        ra, rb, rc = st.columns([3, 1, 1])
+                        ra.write(f"📌 {r['作業名稱']} ({r['繳交狀態']})")
+                        rb.button("已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                        rc.button("訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
 
         with tab3:
             st.subheader("新增班級作業")
@@ -227,7 +155,7 @@ elif menu == "🛠️ 老師管理後台":
                         "更新日期": str(date.today())
                     })
                 new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
-                with st.spinner("正在建立全班紀錄，請勿關閉視窗..."):
+                with st.spinner("正在建立紀錄..."):
                     if save_data(new_df):
                         st.session_state.main_df = new_df
                         st.success("發佈成功！")
@@ -235,9 +163,10 @@ elif menu == "🛠️ 老師管理後台":
 
         st.sidebar.divider()
         with st.sidebar.expander("🗑️ 刪除舊作業"):
-            target = st.selectbox("選擇刪除項", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
-            if st.button("執行刪除"):
-                new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
-                save_data(new_df)
-                st.session_state.main_df = new_df
-                st.rerun()
+            if not st.session_state.main_df.empty:
+                target = st.selectbox("選擇刪除項", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
+                if st.button("執行刪除") and target != "請選擇":
+                    new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
+                    if save_data(new_df):
+                        st.session_state.main_df = new_df
+                        st.rerun()
