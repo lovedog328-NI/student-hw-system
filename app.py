@@ -105,12 +105,16 @@ if st.sidebar.button("🔄 同步雲端/恢復初始資料"):
 menu = st.sidebar.radio("功能", ["🔍 學生查詢", "🛠️ 老師後台"])
 
 def update_status(idx, status):
+    # 1. 更新內存資料
     st.session_state.main_df.at[idx, "繳交狀態"] = status
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-    if save_data(st.session_state.main_df):
-        st.toast("✅ 同步成功")
-        time.sleep(0.5)
-        st.rerun()
+    
+    # 2. 同步到雲端 (這會花一點時間)
+    with st.spinner("同步中..."):
+        save_data(st.session_state.main_df)
+    
+    # ❌ 這裡不需要 st.rerun()，回呼結束後 Streamlit 會自動 rerun
+    st.toast(f"✅ 已更新座號 {st.session_state.main_df.at[idx, '座號']} 的狀態")
 
 # 介面實作與先前版本一致... (省略重複的 UI 代碼，直接整合進去)
 if menu == "🔍 學生查詢":
