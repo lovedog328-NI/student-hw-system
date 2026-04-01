@@ -5,7 +5,7 @@ from datetime import date
 import time
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-救援版", layout="wide")
+st.set_page_config(page_title="303作業登記-穩定版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -17,9 +17,12 @@ STUDENT_LIST = [
     ], 1)
 ]
 
-# --- 2. 救援資料庫邏輯 ---
+# 姓名對照表
+NAME_MAP = {s['座號']: s['姓名'] for s in STUDENT_LIST}
+
+# --- 2. 救援資料庫邏輯 (修正欄位數量不符的問題) ---
 def get_internal_backup():
-    # 這是您提供的最新欠交資料
+    # 原始資料只有 4 欄
     backup_list = [
         ["4", "L2圈詞", "需訂正", "2026-03-27"], ["6", "L2圈詞", "未繳交", "2026-03-27"],
         ["15", "L2圈詞", "未繳交", "2026-03-27"], ["21", "L2圈詞", "需訂正", "2026-03-27"],
@@ -78,18 +81,18 @@ def get_internal_backup():
         ["6", "數習41", "需訂正", "2026-04-01"], ["8", "數習41", "未繳交", "2026-04-01"],
         ["14", "數習41", "未繳交", "2026-04-01"], ["19", "數習41", "未繳交", "2026-04-01"]
     ]
-    base_df = pd.DataFrame(backup_list, columns=["座號", "作業名稱", "繳交狀態", "更新日期", "姓名"])
+    # 先建立基礎 DataFrame (只有 4 欄)
+    base_df = pd.DataFrame(backup_list, columns=["座號", "作業名稱", "繳交狀態", "更新日期"])
     
-    # 處理全班性的大範圍新作業
+    # 全班生成邏輯
     new_batch = [
         ("3/31聯絡簿", "未繳交"), ("國語習作P16-17", "需訂正"), ("L4生字造詞", "未繳交"),
         ("L4圈詞", "未繳交"), ("國甲32-34", "未繳交"), ("成語32-33", "未繳交")
     ]
     
     final_rows = []
-    name_map = {s['座號']: s['姓名'] for s in STUDENT_LIST}
     
-    # 1. 先處理基礎欠交資料
+    # 1. 處理基礎欠交資料
     existing_hws = base_df["作業名稱"].unique()
     for hw in existing_hws:
         hw_sub = base_df[base_df["作業名稱"] == hw]
@@ -97,18 +100,19 @@ def get_internal_backup():
             sid = s['座號']
             match = hw_sub[hw_sub["座號"] == sid]
             if not match.empty:
-                final_rows.append(match.iloc[0].to_dict())
+                # 補齊姓名
+                final_rows.append({"座號":sid, "姓名":NAME_MAP[sid], "作業名稱":hw, "繳交狀態":match.iloc[0]["繳交狀態"], "更新日期":match.iloc[0]["更新日期"]})
             else:
-                final_rows.append({"座號":sid, "姓名":name_map[sid], "作業名稱":hw, "繳交狀態":"已繳交", "更新日期":"2026-03-31"})
+                final_rows.append({"座號":sid, "姓名":NAME_MAP[sid], "作業名稱":hw, "繳交狀態":"已繳交", "更新日期":"2026-03-31"})
 
-    # 2. 處理沒在基礎表的大範圍作業
+    # 2. 處理新批次
     for hw_name, default_status in new_batch:
         if hw_name in existing_hws: continue
         for s in STUDENT_LIST:
             sid = s['座號']
             status = default_status
             if hw_name == "L4圈詞" and sid == "21": status = "需訂正"
-            final_rows.append({"座號":sid, "姓名":name_map[sid], "作業名稱":hw_name, "繳交狀態":status, "更新日期":"2026-04-01"})
+            final_rows.append({"座號":sid, "姓名":NAME_MAP[sid], "作業名稱":hw_name, "繳交狀態":status, "更新日期":"2026-04-01"})
 
     return pd.DataFrame(final_rows)
 
@@ -116,20 +120,19 @@ def get_internal_backup():
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def load_data():
-    all_rescue = get_internal_backup()
+    rescue_df = get_internal_backup()
     try:
         url = "https://docs.google.com/spreadsheets/d/1cZCffUUh3lczFtEq8l49fb4rkPJnEBo0CyZx8TV4OMo/edit"
         cloud_df = conn.read(spreadsheet=url, worksheet="Sheet1", ttl=0)
         
-        # 💡 關鍵：如果雲端資料太少，直接回傳救援資料庫
-        if cloud_df is None or len(cloud_df) < 5:
-            return all_rescue
+        # 如果雲端沒資料或欄位不對，啟動救援
+        if cloud_df is None or len(cloud_df) < 5 or "座號" not in cloud_df.columns:
+            return rescue_df
             
         cloud_df["座號"] = cloud_df["座號"].astype(str)
-        # 以雲端資料優先，若雲端沒有的作業才用救援資料
         return cloud_df
     except:
-        return all_rescue
+        return rescue_df
 
 def save_data(df):
     try:
@@ -149,8 +152,7 @@ st.sidebar.title("🔐 管理權限")
 pwd = st.sidebar.text_input("密碼", type="password")
 is_admin = (pwd == "alice")
 
-if st.sidebar.button("🔄 同步雲端/重置為內建資料"):
-    # 清除快取並強制載入
+if st.sidebar.button("🔄 同步雲端/重置資料"):
     st.session_state.main_df = load_data()
     st.rerun()
 
@@ -159,20 +161,18 @@ menu = st.sidebar.radio("切換功能", ["🔍 學生查詢", "🛠️ 老師後
 def update_status(idx, new_status):
     st.session_state.main_df.at[idx, "繳交狀態"] = new_status
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-    with st.spinner("同步雲端中..."):
+    with st.spinner("同步中..."):
         if save_data(st.session_state.main_df):
-            st.toast("✅ 已同步")
+            st.toast("✅ 已更新")
             time.sleep(0.5)
             st.rerun()
 
-# [功能：查詢]
+# [查詢區]
 if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
         res = st.session_state.main_df[st.session_state.main_df["座號"] == str(sid)]
-        if res.empty:
-            st.warning("目前無此座號的資料，請按左側『同步』按鈕。")
-        else:
+        if not res.empty:
             name = res.iloc[0]['姓名']
             st.subheader(f"👤 {name} 的作業狀況")
             unfilled = res[res["繳交狀態"] != "已繳交"]
@@ -190,10 +190,10 @@ if menu == "🔍 學生查詢":
             with st.expander("查看已完成項目"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
-# [功能：後台]
+# [後台區]
 elif menu == "🛠️ 老師後台":
     if not is_admin:
-        st.warning("請輸入密碼。")
+        st.warning("請輸入正確密碼。")
     else:
         tab1, tab2, tab3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
         with tab1:
