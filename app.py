@@ -73,12 +73,22 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data():
     rescue_df = get_rescue_df()
     try:
+        # 讀取雲端資料
         df = conn.read(worksheet="Sheet1", ttl=0)
+        
         if df is None or df.empty or len(df) < 5:
             return rescue_df
-        df["座號"] = df["座號"].astype(str)
+        
+        # ✨ 關鍵修復：處理 1.0 的問題
+        # 先將 NaN 補空字串，再轉成浮點數轉整數，最後轉字串
+        df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
+        
+        # 排除掉剛才 fillna(0) 產生的 0 (避免出現 0 號學生)
+        df = df[df["座號"] != "0"]
+        
         return df
-    except:
+    except Exception as e:
+        st.error(f"讀取錯誤: {e}")
         return rescue_df
 
 def save_data(df):
