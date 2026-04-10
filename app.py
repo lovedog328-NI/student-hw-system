@@ -5,7 +5,7 @@ from datetime import date
 import time
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-家長通知版", layout="wide")
+st.set_page_config(page_title="303作業登記-專業版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -19,38 +19,34 @@ def load_data():
     try:
         df = conn.read(worksheet="Sheet1", ttl=0)
         if df is None or df.empty:
-            st.warning("雲端目前無資料，請先至後台新增作業。")
             return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
-        # 修復座號格式
         df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
         df = df[df["座號"] != "0"]
         return df
-    except Exception as e:
-        st.error(f"連線失敗: {e}")
+    except:
         return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "更新日期"])
 
 def save_data(df):
     try:
         conn.update(worksheet="Sheet1", data=df)
         return True
-    except Exception as e:
-        st.error(f"雲端儲存失敗: {e}")
+    except:
         return False
 
 # 初始化
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 
-# --- 3. UI 介面 ---
-st.sidebar.title("🔐 管理權限")
-pwd = st.sidebar.text_input("密碼", type="password")
+# --- 3. UI 介面控制 ---
+st.sidebar.title("⚙️ 管理選單")
+pwd = st.sidebar.text_input("老師密碼", type="password")
 is_admin = (pwd == "alice")
 
-if st.sidebar.button("🔄 同步最新資料"):
+if st.sidebar.button("🔄 同步最新雲端資料"):
     st.session_state.main_df = load_data()
     st.rerun()
 
-menu = st.sidebar.radio("功能", ["🔍 學生查詢與列印", "🛠️ 老師管理後台"])
+menu = st.sidebar.radio("切換功能", ["🔍 學生查詢", "🛠️ 老師後台"])
 
 def update_status(idx, status):
     st.session_state.main_df.at[idx, "繳交狀態"] = status
@@ -60,65 +56,101 @@ def update_status(idx, status):
 
 # --- 4. 介面實作 ---
 
-if menu == "🔍 學生查詢與列印":
+if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
-        df = st.session_state.main_df
-        res = df[df["座號"] == str(sid)]
-        
+        res = st.session_state.main_df[st.session_state.main_df["座號"] == str(sid)]
         if not res.empty:
             name = res.iloc[0]['姓名']
             st.subheader(f"👤 {name} 的作業狀況")
-            
-            # 整理積欠作業
             todo = res[res["繳交狀態"] != "已繳交"]
-            
             if todo.empty:
-                st.balloons()
-                st.success(f"🎊 恭喜 {name}！目前沒有任何缺交作業，家長很放心！")
+                st.balloons(); st.success("🎊 全部交齊囉！")
             else:
-                # 顯示目前積欠
                 for idx, row in todo.iterrows():
-                    c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
+                    c1, c2 = st.columns([3, 1])
                     c1.write(f"📌 {row['作業名稱']}")
                     color = "red" if row['繳交狀態'] == "未繳交" else "orange"
-                    c2.markdown(f"狀態：:{color}[**{row['繳交狀態']}**]")
-                    if is_admin:
-                        c3.button("已交", key=f"q_d_{idx}", on_click=update_status, args=(idx, "已繳交"))
-                        c4.button("訂正", key=f"q_r_{idx}", on_click=update_status, args=(idx, "需訂正"))
+                    c2.markdown(f":{color}[**{row['繳交狀態']}**]")
+            with st.expander("查看已完成項目"):
+                st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
-                # --- 🖨️ 自動整理成列印清單 ---
-                st.divider()
-                st.subheader("🖨️ 家長通知單生成器")
-                
-                # 準備要印出的表格內容
-                print_df = todo[["作業名稱", "繳交狀態", "更新日期"]].copy()
-                print_df.columns = ["積欠項目", "目前狀態", "最後檢查日期"]
-                
-                # 產生文字版清單（方便家長閱讀）
-                report_text = f"【303班 作業催繳通知單】\n"
-                report_text += f"學生姓名：{name}  座號：{sid}\n"
-                report_text += f"製表日期：{date.today()}\n"
-                report_text += "-"*30 + "\n"
-                for _, row in print_df.iterrows():
-                    report_text += f"□ {row['積欠項目']} ({row['目前狀態']})\n"
-                report_text += "-"*30 + "\n"
-                report_text += "請家長督促孩子完成後，於聯絡簿簽名。謝謝配合！"
-
-                st.text_area("預覽通知單內容", report_text, height=200)
-                
-                # 提供下載按鈕
-                st.download_button(
-                    label="📥 下載通知單 (TXT檔)",
-                    data=report_text,
-                    file_name=f"303班_{sid}_{name}_作業通知單.txt",
-                    mime="text/plain"
-                )
-
-elif menu == "🛠️ 老師管理後台":
+elif menu == "🛠️ 老師後台":
     if not is_admin:
-        st.warning("請輸入正確密碼。")
+        st.warning("⚠️ 請輸入正確密碼以進入管理模式。")
     else:
-        # (後台代碼保持不變...)
-        tab1, tab2, tab3 = st.tabs(["📋 缺交名單", "🎯 快速補交", "📝 新增作業"])
-        # ... (這裡省略重複的後台代碼，您可以直接沿用之前的版本)
+        tab1, tab2, tab3 = st.tabs(["📋 缺交總覽", "🎯 補交與列印單據", "📝 新增作業"])
+        
+        with tab1:
+            hws = st.session_state.main_df["作業名稱"].unique()
+            sel = st.selectbox("選擇作業項目", ["請選擇"] + list(hws))
+            if sel != "請選擇":
+                m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == sel) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
+                if m.empty: st.success("🎉 此項作業已全班交齊！")
+                for i, r in m.iterrows():
+                    ca, cb, cc, cd = st.columns([2, 1.5, 1, 1])
+                    ca.write(f"**{r['座號']}. {r['姓名']}**")
+                    color = "red" if r['繳交狀態'] == "未繳交" else "orange"
+                    cb.markdown(f":{color}[**{r['繳交狀態']}**]")
+                    cc.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                    cd.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
+
+        with tab2:
+            st.subheader("🎯 學生個別補交與通知單")
+            tsid = st.text_input("輸入座號 (1-22)：", key="tsid")
+            if tsid:
+                sm = st.session_state.main_df[(st.session_state.main_df["座號"] == str(tsid))]
+                if not sm.empty:
+                    name = sm.iloc[0]['姓名']
+                    todo = sm[sm["繳交狀態"] != "已繳交"]
+                    
+                    if todo.empty:
+                        st.success(f"✅ {name} 目前沒有欠交項目。")
+                    else:
+                        st.write(f"正在處理：**{name}** 的欠交清單")
+                        for i, r in todo.iterrows():
+                            ra, rb, rc, rd = st.columns([3, 2, 1, 1])
+                            ra.write(f"📌 {r['作業名稱']}")
+                            color = "red" if r['繳交狀態'] == "未繳交" else "orange"
+                            rb.markdown(f":{color}[**{r['繳交狀態']}**]")
+                            rc.button("已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                            rd.button("訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
+                        
+                        # --- 🖨️ 家長通知單功能 ---
+                        st.divider()
+                        st.markdown("### 🖨️ 生成家長通知單")
+                        report_text = f"【303班 作業催繳通知單】\n"
+                        report_text += f"學生姓名：{name}  座號：{tsid}\n"
+                        report_text += f"通知日期：{date.today()}\n"
+                        report_text += "------------------------------\n"
+                        for _, row in todo.iterrows():
+                            report_text += f"□ {row['作業名稱']} ({row['繳交狀態']})\n"
+                        report_text += "------------------------------\n"
+                        report_text += "請家長督促孩子完成後，於聯絡簿此處簽名。\n\n家長簽名：________________"
+                        
+                        st.text_area("可複製內容到 LINE 或 Word", report_text, height=200)
+                        st.download_button(
+                            label="📥 下載通知單 (TXT)",
+                            data=report_text,
+                            file_name=f"303班_{tsid}_{name}_通知單.txt",
+                            mime="text/plain"
+                        )
+
+        with tab3:
+            st.subheader("📝 新增整班作業項目")
+            nhw = st.text_input("新增名稱 (例如：國習 L8)：")
+            if st.button("🚀 確認發佈"):
+                new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "更新日期": str(date.today())} for s in STUDENT_LIST]
+                new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
+                if save_data(new_df):
+                    st.session_state.main_df = new_df
+                    st.success("發佈成功！"); st.rerun()
+
+        st.sidebar.divider()
+        with st.sidebar.expander("🗑️ 刪除紀錄"):
+            target = st.selectbox("選取要刪除的作業", list(st.session_state.main_df["作業名稱"].unique()))
+            if st.button("執行刪除"):
+                new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
+                if save_data(new_df):
+                    st.session_state.main_df = new_df
+                    st.rerun()
