@@ -52,7 +52,7 @@ def update_status(idx, status):
     st.session_state.main_df.at[idx, "繳交狀態"] = status
     st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
     save_data(st.session_state.main_df)
-    st.toast(f"✅ 已更新")
+    st.toast(f"✅ 已更新狀態為：{status}")
 
 # --- 4. 介面實作 ---
 
@@ -68,16 +68,20 @@ if menu == "🔍 學生查詢":
                 st.balloons(); st.success("🎊 全部交齊囉！")
             else:
                 for idx, row in todo.iterrows():
-                    c1, c2 = st.columns([3, 1])
+                    c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
                     c1.write(f"📌 {row['作業名稱']}")
                     color = "red" if row['繳交狀態'] == "未繳交" else "orange"
                     c2.markdown(f":{color}[**{row['繳交狀態']}**]")
+                    if is_admin:
+                        # ✨ 修正：訂正左、已交右
+                        c3.button("訂正", key=f"q_r_{idx}", on_click=update_status, args=(idx, "需訂正"))
+                        c4.button("已交", key=f"q_d_{idx}", on_click=update_status, args=(idx, "已繳交"))
             with st.expander("查看已完成項目"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
 elif menu == "🛠️ 老師後台":
     if not is_admin:
-        st.warning("⚠️ 請輸入正確密碼以進入管理模式。")
+        st.warning("⚠️ 請輸入正確密碼。")
     else:
         tab1, tab2, tab3 = st.tabs(["📋 缺交總覽", "🎯 補交與列印單據", "📝 新增作業"])
         
@@ -91,9 +95,10 @@ elif menu == "🛠️ 老師後台":
                     ca, cb, cc, cd = st.columns([2, 1.5, 1, 1])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
                     color = "red" if r['繳交狀態'] == "未繳交" else "orange"
-                    cb.markdown(f":{color}[**{r['繳交狀態']}**]")
-                    cc.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
-                    cd.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
+                    cb.markdown(f"目前：:{color}[**{r['繳交狀態']}**]")
+                    # ✨ 修正：訂正左、已交右
+                    cc.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
+                    cd.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
 
         with tab2:
             st.subheader("🎯 學生個別補交與通知單")
@@ -103,7 +108,6 @@ elif menu == "🛠️ 老師後台":
                 if not sm.empty:
                     name = sm.iloc[0]['姓名']
                     todo = sm[sm["繳交狀態"] != "已繳交"]
-                    
                     if todo.empty:
                         st.success(f"✅ {name} 目前沒有欠交項目。")
                     else:
@@ -113,32 +117,22 @@ elif menu == "🛠️ 老師後台":
                             ra.write(f"📌 {r['作業名稱']}")
                             color = "red" if r['繳交狀態'] == "未繳交" else "orange"
                             rb.markdown(f":{color}[**{r['繳交狀態']}**]")
-                            rc.button("已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
-                            rd.button("訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
+                            # ✨ 修正：訂正左、已交右
+                            rc.button("訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
+                            rd.button("已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
                         
-                        # --- 🖨️ 聯絡簿清單範本 (無外框版) ---
                         st.divider()
                         st.markdown("### 🖨️ 欠交清單 (適合貼入表格)")
-                        
-                        clean_text = f"【作業催繳通知單】\n"
-                        clean_text += f"日期：{date.today().strftime('%m/%d')}\n"
-                        clean_text += f"座號：{tsid}  姓名：{name}\n"
-                        clean_text += "--------------------\n"
+                        clean_text = f"【作業催繳通知單】\n日期：{date.today().strftime('%m/%d')}\n座號：{tsid}  姓名：{name}\n--------------------\n"
                         for _, row in todo.iterrows():
                             mark = "未交" if row['繳交狀態'] == "未繳交" else "訂正"
                             clean_text += f"□ {row['作業名稱']} ({mark})\n"
-                        
-                        # 預留一行自填位
-                        clean_text += f"□ ________________\n"
-                        clean_text += "--------------------\n"
-                        clean_text += "家長簽名：___________"
-                        
+                        clean_text += f"□ ________________\n--------------------\n家長簽名：___________"
                         st.text_area("直接複製下方文字", clean_text, height=220)
-                        st.caption("💡 點擊右上方按鈕複製文字後，貼入 Word 表格中即可。")
 
         with tab3:
             st.subheader("📝 新增整班作業項目")
-            nhw = st.text_input("新增名稱 (例如：國習 L8)：")
+            nhw = st.text_input("新增名稱：")
             if st.button("🚀 確認發佈"):
                 new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "更新日期": str(date.today())} for s in STUDENT_LIST]
                 new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
