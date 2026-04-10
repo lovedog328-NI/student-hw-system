@@ -77,7 +77,7 @@ if menu == "🔍 學生查詢":
 
 elif menu == "🛠️ 老師後台":
     if not is_admin:
-        st.warning("⚠️ 請輸入正確密碼。")
+        st.warning("⚠️ 請輸入正確密碼以進入管理模式。")
     else:
         tab1, tab2, tab3 = st.tabs(["📋 缺交總覽", "🎯 補交與列印單據", "📝 新增作業"])
         
@@ -116,31 +116,25 @@ elif menu == "🛠️ 老師後台":
                             rc.button("已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
                             rd.button("訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
                         
-                        # --- 🖨️ 聯絡簿印章範本格式 ---
+                        # --- 🖨️ 聯絡簿清單範本 (無外框版) ---
                         st.divider()
-                        st.markdown("### 🖨️ 聯絡簿通知單 (適合貼入 Word)")
+                        st.markdown("### 🖨️ 欠交清單 (適合貼入表格)")
                         
-                        stamp_text = f"┌──────────────────┐\n"
-                        stamp_text += f"│  303 作業催繳通知 ({date.today().strftime('%m/%d')})  │\n"
-                        stamp_text += f"├──────────────────┤\n"
-                        stamp_text += f"│ 座號：{tsid.ljust(2)} 姓名：{name.ljust(5)}  │\n"
-                        stamp_text += f"│                                  │\n"
+                        clean_text = f"【作業催繳通知單】\n"
+                        clean_text += f"日期：{date.today().strftime('%m/%d')}\n"
+                        clean_text += f"座號：{tsid}  姓名：{name}\n"
+                        clean_text += "--------------------\n"
                         for _, row in todo.iterrows():
-                            hw_cut = row['作業名稱'][:10] # 避免作業標題太長爆格
-                            status_mark = "未" if row['繳交狀態'] == "未繳交" else "訂"
-                            stamp_text += f"│ □ {hw_cut.ljust(10)} ({status_mark})      │\n"
+                            mark = "未交" if row['繳交狀態'] == "未繳交" else "訂正"
+                            clean_text += f"□ {row['作業名稱']} ({mark})\n"
                         
-                        # 補齊空白行，讓印章大小固定美觀
-                        if len(todo) < 4:
-                            for _ in range(4 - len(todo)):
-                                stamp_text += f"│ □ ________________      │\n"
-                                
-                        stamp_text += f"│                                  │\n"
-                        stamp_text += f"│ 家長簽名：_______________        │\n"
-                        stamp_text += f"└──────────────────┘"
+                        # 預留一行自填位
+                        clean_text += f"□ ________________\n"
+                        clean_text += "--------------------\n"
+                        clean_text += "家長簽名：___________"
                         
-                        st.code(stamp_text, language="text")
-                        st.caption("💡 點擊右上角圖示即可複製，直接貼入 Word 表格中。建議使用『新細明體』或『微軟正黑體』對齊效果最佳。")
+                        st.text_area("直接複製下方文字", clean_text, height=220)
+                        st.caption("💡 點擊右上方按鈕複製文字後，貼入 Word 表格中即可。")
 
         with tab3:
             st.subheader("📝 新增整班作業項目")
@@ -151,4 +145,13 @@ elif menu == "🛠️ 老師後台":
                 if save_data(new_df):
                     st.session_state.main_df = new_df
                     st.success("發佈成功！"); st.rerun()
-        # ... (其餘刪除邏輯保持不變)
+
+        st.sidebar.divider()
+        with st.sidebar.expander("🗑️ 刪除作業"):
+            targets = list(st.session_state.main_df["作業名稱"].unique())
+            target = st.selectbox("選取要刪除的作業", ["請選擇"] + targets)
+            if st.button("執行刪除") and target != "請選擇":
+                new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
+                if save_data(new_df):
+                    st.session_state.main_df = new_df
+                    st.rerun()
