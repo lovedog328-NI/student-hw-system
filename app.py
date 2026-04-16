@@ -2,7 +2,6 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date
-import time
 
 # --- 1. 基本設定 ---
 st.set_page_config(page_title="303作業登記-專業版", layout="wide")
@@ -37,7 +36,31 @@ def save_data(df):
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 
-# --- 3. UI 介面控制 ---
+# --- 3. 局部更新元件 (Fragment) ---
+# 這個功能讓按鈕按下後，只更新這一行，不會重整整個畫面
+@st.fragment
+def status_buttons(idx, row_key):
+    c_status, c_edit, c_done = st.columns([1.5, 1, 1])
+    
+    current_status = st.session_state.main_df.at[idx, "繳交狀態"]
+    color = "red" if current_status == "未繳交" else "orange"
+    c_status.markdown(f":{color}[**{current_status}**]")
+    
+    # 訂正按鈕 (左)
+    if c_edit.button("訂正", key=f"btn_r_{row_key}_{idx}"):
+        st.session_state.main_df.at[idx, "繳交狀態"] = "需訂正"
+        st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
+        save_data(st.session_state.main_df)
+        st.rerun() # Fragment 內的 rerun 只會觸發局部或輕量刷新
+
+    # 已交按鈕 (右)
+    if c_done.button("已交", key=f"btn_d_{row_key}_{idx}"):
+        st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
+        st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
+        save_data(st.session_state.main_df)
+        st.rerun()
+
+# --- 4. UI 介面控制 ---
 st.sidebar.title("⚙️ 管理選單")
 pwd = st.sidebar.text_input("老師密碼", type="password")
 is_admin = (pwd == "alice")
@@ -48,13 +71,7 @@ if st.sidebar.button("🔄 同步最新雲端資料"):
 
 menu = st.sidebar.radio("切換功能", ["🔍 學生查詢", "🛠️ 老師後台"])
 
-def update_status(idx, status):
-    st.session_state.main_df.at[idx, "繳交狀態"] = status
-    st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-    save_data(st.session_state.main_df)
-    st.toast(f"✅ 已更新狀態為：{status}")
-
-# --- 4. 介面實作 ---
+# --- 5. 介面實作 ---
 
 if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
@@ -68,13 +85,10 @@ if menu == "🔍 學生查詢":
                 st.balloons(); st.success("🎊 全部交齊囉！")
             else:
                 for idx, row in todo.iterrows():
-                    c1, c2, c3, c4 = st.columns([3, 2, 1, 1])
+                    c1, c_frag = st.columns([3, 4])
                     c1.write(f"📌 {row['作業名稱']}")
-                    color = "red" if row['繳交狀態'] == "未繳交" else "orange"
-                    c2.markdown(f":{color}[**{row['繳交狀態']}**]")
-                    if is_admin:
-                        c3.button("訂正", key=f"q_r_{idx}", on_click=update_status, args=(idx, "需訂正"))
-                        c4.button("已交", key=f"q_d_{idx}", on_click=update_status, args=(idx, "已繳交"))
+                    with c_frag:
+                        status_buttons(idx, "query")
             with st.expander("查看已完成項目"):
                 st.table(res[res["繳交狀態"] == "已繳交"][["作業名稱", "更新日期"]])
 
@@ -82,52 +96,35 @@ elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("⚠️ 請輸入正確密碼。")
     else:
-        # 計算已完成與未完成作業
+        # 計算統計資料
         all_hws = st.session_state.main_df["作業名稱"].unique()
-        completed_hws = []
-        ongoing_hws = []
-        for hw in all_hws:
-            missing_count = len(st.session_state.main_df[(st.session_state.main_df["作業名稱"] == hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")])
-            if missing_count == 0:
-                completed_hws.append(hw)
-            else:
-                ongoing_hws.append((hw, missing_count))
+        completed_hws = [hw for hw in all_hws if len(st.session_state.main_df[(st.session_state.main_df["作業名稱"] == hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]) == 0]
+        ongoing_hws = [(hw, len(st.session_state.main_df[(st.session_state.main_df["作業名稱"] == hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")])) for hw in all_hws if hw not in completed_hws]
 
-        # --- Sidebar 批次管理功能 ---
-        st.sidebar.divider()
-        st.sidebar.subheader("🧹 批次管理")
+        # 側邊欄批次刪除
         if completed_hws:
-            st.sidebar.success(f"目前有 {len(completed_hws)} 項作業已交齊")
-            if st.sidebar.button("🗑️ 批次刪除已交齊作業"):
-                new_df = st.session_state.main_df[~st.session_state.main_df["作業名稱"].isin(completed_hws)]
-                if save_data(new_df):
-                    st.session_state.main_df = new_df
-                    st.sidebar.info("已清理完成！")
-                    st.rerun()
-        else:
-            st.sidebar.info("目前沒有已全數交齊的作業。")
+            st.sidebar.divider()
+            if st.sidebar.button(f"🗑️ 批次刪除 {len(completed_hws)} 項已交齊作業"):
+                st.session_state.main_df = st.session_state.main_df[~st.session_state.main_df["作業名稱"].isin(completed_hws)]
+                save_data(st.session_state.main_df)
+                st.rerun()
 
-        # --- 主要分頁 ---
         tab1, tab2, tab3 = st.tabs(["📋 缺交總覽", "🎯 補交與列印單據", "📝 新增作業"])
         
         with tab1:
             if completed_hws:
-                with st.expander(f"✅ 已全班交齊的作業 ({len(completed_hws)} 項)", expanded=False):
-                    for hw in completed_hws:
-                        st.write(f"🎉 **{hw}**")
+                with st.expander(f"✅ 已全班交齊 ({len(completed_hws)} 項)"):
+                    for hw in completed_hws: st.write(f"🎉 {hw}")
             st.divider()
-            st.subheader("🔍 未交齊清單查詢")
             sel = st.selectbox("選擇作業項目", ["請選擇"] + [f"{h} (欠 {c} 人)" for h, c in ongoing_hws])
             if sel != "請選擇":
                 target_hw = sel.split(" (欠")[0]
                 m = st.session_state.main_df[(st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["繳交狀態"] != "已繳交")]
                 for i, r in m.iterrows():
-                    ca, cb, cc, cd = st.columns([2, 1.5, 1, 1])
+                    ca, c_frag = st.columns([2, 4])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
-                    color = "red" if r['繳交狀態'] == "未繳交" else "orange"
-                    cb.markdown(f"目前：:{color}[**{r['繳交狀態']}**]")
-                    cc.button("訂正", key=f"t1_r_{i}", on_click=update_status, args=(i, "需訂正"))
-                    cd.button("已交", key=f"t1_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                    with c_frag:
+                        status_buttons(i, "tab1")
 
         with tab2:
             st.subheader("🎯 學生個別補交與通知單")
@@ -138,41 +135,27 @@ elif menu == "🛠️ 老師後台":
                     name = sm.iloc[0]['姓名']
                     todo = sm[sm["繳交狀態"] != "已繳交"]
                     if todo.empty:
-                        st.success(f"✅ {name} 目前沒有欠交項目。")
+                        st.success(f"✅ {name} 目前無欠交。")
                     else:
-                        st.write(f"正在處理：**{name}** 的欠交清單")
                         for i, r in todo.iterrows():
-                            ra, rb, rc, rd = st.columns([3, 2, 1, 1])
+                            ra, r_frag = st.columns([3, 4])
                             ra.write(f"📌 {r['作業名稱']}")
-                            color = "red" if r['繳交狀態'] == "未繳交" else "orange"
-                            rb.markdown(f":{color}[**{r['繳交狀態']}**]")
-                            rc.button("訂正", key=f"t2_r_{i}", on_click=update_status, args=(i, "需訂正"))
-                            rd.button("已交", key=f"t2_d_{i}", on_click=update_status, args=(i, "已繳交"))
+                            with r_frag:
+                                status_buttons(i, "tab2")
                         st.divider()
-                        st.markdown("### 🖨️ 欠交清單 (適合貼入表格)")
+                        st.markdown("### 🖨️ 欠交清單")
                         clean_text = f"【作業催繳通知單】\n日期：{date.today().strftime('%m/%d')}\n座號：{tsid}  姓名：{name}\n--------------------\n"
                         for _, row in todo.iterrows():
                             mark = "未交" if row['繳交狀態'] == "未繳交" else "訂正"
                             clean_text += f"□ {row['作業名稱']} ({mark})\n"
                         clean_text += f"□ ________________\n--------------------\n家長簽名：___________"
-                        st.text_area("直接複製下方文字", clean_text, height=220)
+                        st.text_area("直接複製下方文字", clean_text, height=200)
 
         with tab3:
             st.subheader("📝 新增整班作業項目")
             nhw = st.text_input("新增名稱：")
             if st.button("🚀 確認發佈"):
                 new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "更新日期": str(date.today())} for s in STUDENT_LIST]
-                new_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
-                if save_data(new_df):
-                    st.session_state.main_df = new_df
-                    st.success("發佈成功！"); st.rerun()
-
-        st.sidebar.divider()
-        with st.sidebar.expander("🗑️ 手動刪除特定作業"):
-            targets = list(st.session_state.main_df["作業名稱"].unique())
-            target = st.selectbox("選取要刪除的作業", ["請選擇"] + targets)
-            if st.button("執行刪除") and target != "請選擇":
-                new_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
-                if save_data(new_df):
-                    st.session_state.main_df = new_df
-                    st.rerun()
+                st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
+                save_data(st.session_state.main_df)
+                st.success("發佈成功！"); st.rerun()
