@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-視覺優化版", layout="wide")
+st.set_page_config(page_title="303作業登記-學生待辦專注版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單 (詹荺蓁 已更正)
@@ -13,7 +13,6 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "洪語緹", "林祈平", "鄧安晴", "蔣語桐", "邱薇瑀", "鍾芮昕", "詹荺蓁", "劉姝言",
     "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"
 ], 1)]
-NAME_MAP = {s['座號']: s['姓名'] for s in STUDENT_LIST}
 
 # --- 2. 核心資料邏輯 ---
 conn = st.connection("gsheets", type=GSheetsConnection)
@@ -24,12 +23,11 @@ def load_data():
         for col in ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"]:
             if col not in df.columns:
                 df[col] = ""
-        
         if df is None or df.empty:
             return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"])
-            
         df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
         df = df[df["座號"] != "0"]
+        # 同步姓名修正
         for s in STUDENT_LIST:
             df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
         return df
@@ -47,10 +45,9 @@ def save_data(df):
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 
-# --- 3. 局部更新元件 (自定義顏色邏輯) ---
+# --- 3. 局部更新元件 (顏色規則：需訂正-紅, 未繳交-黃, 已繳交-綠) ---
 @st.fragment
 def status_buttons(idx, row_key, show_score=False):
-    # 老師模式下分配欄位寬度
     if show_score:
         c_status, c_score, c_edit, c_done = st.columns([1.2, 1, 1, 1])
     else:
@@ -58,12 +55,11 @@ def status_buttons(idx, row_key, show_score=False):
     
     current_status = st.session_state.main_df.at[idx, "繳交狀態"]
     
-    # ✨ 顏色邏輯修正
-    if current_status == "未繳交":
-        color = "blue"  # Streamlit 的黃色常用 blue 或直接用 markdown 控制，這裡用語法糖
-        st_color = "yellow"
-    elif current_status == "需訂正":
+    # 顏色邏輯
+    if current_status == "需訂正":
         st_color = "red"
+    elif current_status == "未繳交":
+        st_color = "orange" # Streamlit 的黃色系
     else:
         st_color = "green"
         
@@ -76,14 +72,12 @@ def status_buttons(idx, row_key, show_score=False):
             st.session_state.main_df.at[idx, "成績"] = new_score
             save_data(st.session_state.main_df)
 
-    # 訂正按鈕 (左)
     if c_edit.button("訂正", key=f"btn_r_{row_key}_{idx}"):
         st.session_state.main_df.at[idx, "繳交狀態"] = "需訂正"
         st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
         save_data(st.session_state.main_df)
         st.rerun(scope="fragment")
 
-    # 已交按鈕 (右)
     if c_done.button("已交", key=f"btn_d_{row_key}_{idx}"):
         st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
         st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
@@ -101,37 +95,39 @@ if st.sidebar.button("🔄 同步最新雲端資料"):
 
 menu = st.sidebar.radio("切換功能", ["🔍 學生查詢", "🛠️ 老師後台"])
 
-# [學生查詢介面]
+# [學生查詢介面] - 只顯示未完成部分
 if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
         res = st.session_state.main_df[st.session_state.main_df["座號"] == str(sid)]
         if not res.empty:
             name = res.iloc[0]['姓名']
-            st.subheader(f"👤 {name} 的作業狀況")
+            st.subheader(f"👤 {name} 的待辦作業清單")
+            
+            # ✨ 關鍵邏輯：過濾掉已繳交的項目
             todo = res[res["繳交狀態"] != "已繳交"]
             
             if todo.empty:
                 st.balloons()
-                st.success(f"🎊 太棒了，{name}！你目前沒有欠任何作業喔！")
+                st.success(f"🎊 太棒了，{name}！目前沒有欠作業或需要訂正的項目喔！")
             else:
-                st.warning(f"注意：還有 {len(todo)} 項作業需要處理！")
-                # 學生視角也套用顏色顯示 (表格內顏色需用 Pandas Styler 但會影響效能，這裡用清單呈現)
-                for idx, row in res.iterrows():
+                st.info(f"加油！還有 {len(todo)} 項作業需要處理：")
+                # 僅列出待辦項目，並依顏色顯示
+                for idx, row in todo.iterrows():
                     c1, c2, c3 = st.columns([3, 2, 2])
-                    c1.write(f"📌 {row['作業名稱']}")
-                    # 顏色套用
-                    s_color = "red" if row['繳交狀態'] == "需訂正" else ("green" if row['繳交狀態'] == "已繳交" else "orange")
+                    c1.write(f"📌 **{row['作業名稱']}**")
+                    s_color = "red" if row['繳交狀態'] == "需訂正" else "orange"
                     c2.markdown(f":{s_color}[{row['繳交狀態']}]")
-                    c3.caption(f"更新：{row['更新日期']}")
+                    c3.caption(f"登記日期：{row['更新日期']}")
             
-            if is_admin:
+            # 管理員登入後可在學生頁面直接操作待辦項
+            if is_admin and not todo.empty:
                 st.divider()
-                st.write("🔧 管理員快速操作：")
-                for idx, row in res[res["繳交狀態"] != "已繳交"].iterrows():
+                st.write("🔧 管理員快速操作 (僅顯示待辦)：")
+                for idx, row in todo.iterrows():
                     ca, cb = st.columns([2, 5])
                     ca.write(f"📌 {row['作業名稱']}")
-                    with cb: status_buttons(idx, "query", show_score=True)
+                    with cb: status_buttons(idx, "query_admin", show_score=True)
 
 # [老師後台介面]
 elif menu == "🛠️ 老師後台":
@@ -156,12 +152,13 @@ elif menu == "🛠️ 老師後台":
                         status_buttons(i, "tab1", show_score=True)
 
         with tab2:
-            tsid = st.text_input("輸入座號 (1-22)：", key="tsid")
+            tsid = st.text_input("輸入座號管理 (1-22)：", key="tsid")
             if tsid:
                 sm = all_df[(all_df["座號"] == str(tsid))]
                 if not sm.empty:
                     name = sm.iloc[0]['姓名']
-                    st.write(f"正在管理：**{name}**")
+                    st.write(f"管理對象：**{name}**")
+                    # 老師管理介面則列出所有項目，方便老師修改已交過的項目
                     for i, r in sm.iterrows():
                         ra, r_frag = st.columns([2, 6])
                         ra.write(f"📌 {r['作業名稱']}")
