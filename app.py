@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-強化刪除版", layout="wide")
+st.set_page_config(page_title="303作業登記-成績空白預設版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -20,10 +20,17 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data():
     try:
         df = conn.read(worksheet="Sheet1", ttl=0)
+        # ✨ 讀取時，強制讓不存在的欄位變空白，並把現有的 NaN 轉為空字串
         for col in ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"]:
-            if col not in df.columns: df[col] = ""
+            if col not in df.columns:
+                df[col] = ""
+        
+        # 處理所有 NaN，統一轉成空字串，避免系統誤判
+        df = df.fillna("")
+        
         if df is None or df.empty:
             return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"])
+            
         df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
         df = df[df["座號"] != "0"]
         for s in STUDENT_LIST:
@@ -34,9 +41,12 @@ def load_data():
 
 def save_data(df):
     try:
+        # 儲存前再次確保空值都是空字串
+        df = df.fillna("")
         conn.update(worksheet="Sheet1", data=df)
         return True
-    except: return False
+    except:
+        return False
 
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
@@ -54,8 +64,11 @@ def status_buttons(idx, row_key, show_score=False):
     c_status.markdown(f":{st_color}[**{current_status}**]")
     
     if show_score:
-        current_score = str(st.session_state.main_df.at[idx, "成績"]) if not pd.isna(st.session_state.main_df.at[idx, "成績"]) else ""
-        new_score = c_score.text_input("成績", value=current_score, key=f"score_{row_key}_{idx}", label_visibility="collapsed", placeholder="分數")
+        # 取得成績，如果是 None 或 NaN 則顯示空字串
+        raw_val = st.session_state.main_df.at[idx, "成績"]
+        current_score = str(raw_val) if pd.notna(raw_val) and raw_val != "" else ""
+        
+        new_score = c_score.text_input("成績", value=current_score, key=f"score_{row_key}_{idx}", label_visibility="collapsed", placeholder="成績")
         if new_score != current_score:
             st.session_state.main_df.at[idx, "成績"] = new_score
             save_data(st.session_state.main_df)
@@ -114,31 +127,29 @@ elif menu == "🛠️ 老師後台":
         st.sidebar.divider()
         st.sidebar.subheader("🗑️ 快速清理")
         
-        # 分類作業
         no_score_hws = []
         has_score_hws = []
         
         for hw in all_hws:
             hw_data = all_df[all_df["作業名稱"] == hw]
-            if len(hw_data[hw_data["繳交狀態"] != "已繳交"]) == 0: # 已交齊
+            if len(hw_data[hw_data["繳交狀態"] != "已繳交"]) == 0:
+                # ✨ 嚴格判定成績欄位是否為空
                 has_any_score = hw_data[hw_data["成績"].apply(lambda x: str(x).strip() != "")].shape[0] > 0
                 if has_any_score: has_score_hws.append(hw)
                 else: no_score_hws.append(hw)
 
-        # 1. 無成績清理 (直接顯示)
         if no_score_hws:
             if st.sidebar.button(f"🗑️ 批次刪除 {len(no_score_hws)} 項無成績作業"):
                 st.session_state.main_df = all_df[~all_df["作業名稱"].isin(no_score_hws)]
                 save_data(st.session_state.main_df)
                 st.rerun()
 
-        # 2. 有成績清理 (二次確認)
         if has_score_hws:
             st.sidebar.markdown("---")
-            st.sidebar.error("⚠️ 偵測到含成績的已完成作業")
-            confirm = st.sidebar.checkbox("我確定要刪除包含成績的紀錄")
+            st.sidebar.error("⚠️ 偵測到含成績的完成作業")
+            confirm = st.sidebar.checkbox("確定要刪除含成績紀錄")
             if confirm:
-                if st.sidebar.button(f"🔥 強制刪除 {len(has_score_hws)} 項含成績作業"):
+                if st.sidebar.button(f"🔥 強制刪除 {len(has_score_hws)} 項作業"):
                     st.session_state.main_df = all_df[~all_df["作業名稱"].isin(has_score_hws)]
                     save_data(st.session_state.main_df)
                     st.rerun()
@@ -166,19 +177,12 @@ elif menu == "🛠️ 老師後台":
                         ra, r_frag = st.columns([2, 6])
                         ra.write(f"📌 {r['作業名稱']}")
                         with r_frag: status_buttons(i, "tab2", show_score=True)
-                    st.divider(); st.markdown("### 🖨️ 催繳清單")
-                    todo_list = sm[sm["繳交狀態"] != "已繳交"]
-                    clean_text = f"【作業催繳通知單】\n日期：{date.today().strftime('%m/%d')}\n座號：{tsid}  姓名：{name}\n--------------------\n"
-                    for _, row in todo_list.iterrows():
-                        mark = "未交" if row['繳交狀態'] == "未繳交" else "訂正"
-                        clean_text += f"□ {row['作業名稱']} ({mark})\n"
-                    clean_text += "--------------------\n家長簽名：___________"
-                    st.text_area("複製通知文字", clean_text, height=150)
 
         with tab3:
             st.subheader("📝 新增作業")
             nhw = st.text_input("作業名稱：")
             if st.button("🚀 確認發佈"):
+                # ✨ 新增作業時，預設成績為空字串 ""
                 new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
                 st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
                 save_data(st.session_state.main_df)
