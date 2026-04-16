@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-成績空白預設版", layout="wide")
+st.set_page_config(page_title="303作業登記-判定優化版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -20,12 +20,12 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data():
     try:
         df = conn.read(worksheet="Sheet1", ttl=0)
-        # ✨ 讀取時，強制讓不存在的欄位變空白，並把現有的 NaN 轉為空字串
+        # 確保必要欄位存在
         for col in ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"]:
             if col not in df.columns:
                 df[col] = ""
         
-        # 處理所有 NaN，統一轉成空字串，避免系統誤判
+        # 處理 NaN 轉為空字串，確保判定精準
         df = df.fillna("")
         
         if df is None or df.empty:
@@ -41,7 +41,6 @@ def load_data():
 
 def save_data(df):
     try:
-        # 儲存前再次確保空值都是空字串
         df = df.fillna("")
         conn.update(worksheet="Sheet1", data=df)
         return True
@@ -64,10 +63,10 @@ def status_buttons(idx, row_key, show_score=False):
     c_status.markdown(f":{st_color}[**{current_status}**]")
     
     if show_score:
-        # 取得成績，如果是 None 或 NaN 則顯示空字串
         raw_val = st.session_state.main_df.at[idx, "成績"]
-        current_score = str(raw_val) if pd.notna(raw_val) and raw_val != "" else ""
+        current_score = str(raw_val) if pd.notna(raw_val) and str(raw_val).strip() != "" else ""
         
+        # 這裡的 placeholder="成績" 只是提示文字，不代表內容
         new_score = c_score.text_input("成績", value=current_score, key=f"score_{row_key}_{idx}", label_visibility="collapsed", placeholder="成績")
         if new_score != current_score:
             st.session_state.main_df.at[idx, "成績"] = new_score
@@ -123,7 +122,7 @@ elif menu == "🛠️ 老師後台":
         all_df = st.session_state.main_df
         all_hws = all_df["作業名稱"].unique()
         
-        # 側邊欄清理區
+        # --- 側邊欄清理邏輯優化 ---
         st.sidebar.divider()
         st.sidebar.subheader("🗑️ 快速清理")
         
@@ -132,8 +131,10 @@ elif menu == "🛠️ 老師後台":
         
         for hw in all_hws:
             hw_data = all_df[all_df["作業名稱"] == hw]
+            # 判斷是否全班交齊
             if len(hw_data[hw_data["繳交狀態"] != "已繳交"]) == 0:
-                # ✨ 嚴格判定成績欄位是否為空
+                # ✨ 判定：如果所有學生的成績欄位去掉空白後都是空的，就屬於無成績作業
+                # 畫面上會顯示 placeholder "成績"，代表背後資料是空的
                 has_any_score = hw_data[hw_data["成績"].apply(lambda x: str(x).strip() != "")].shape[0] > 0
                 if has_any_score: has_score_hws.append(hw)
                 else: no_score_hws.append(hw)
@@ -162,13 +163,14 @@ elif menu == "🛠️ 老師後台":
             if sel != "請選擇":
                 target_hw = sel.split(" (欠")[0]
                 m = all_df[all_df["作業名稱"] == target_hw]
+                st.info("💡 當成績顯示為灰色的『成績』時，代表尚未輸入，該作業可批次刪除。")
                 for i, r in m.iterrows():
                     ca, c_frag = st.columns([1.5, 6])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
                     with c_frag: status_buttons(i, "tab1", show_score=True)
 
         with tab2:
-            tsid = st.text_input("輸入座號管理 (1-22)：", key="tsid")
+            tsid = st.text_input("座號管理：", key="tsid")
             if tsid:
                 sm = all_df[(all_df["座號"] == str(tsid))]
                 if not sm.empty:
@@ -182,7 +184,6 @@ elif menu == "🛠️ 老師後台":
             st.subheader("📝 新增作業")
             nhw = st.text_input("作業名稱：")
             if st.button("🚀 確認發佈"):
-                # ✨ 新增作業時，預設成績為空字串 ""
                 new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
                 st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
                 save_data(st.session_state.main_df)
