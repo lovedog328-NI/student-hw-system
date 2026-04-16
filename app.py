@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-正向鼓勵版", layout="wide")
+st.set_page_config(page_title="303作業登記-視覺優化版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單 (詹荺蓁 已更正)
@@ -30,7 +30,6 @@ def load_data():
             
         df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
         df = df[df["座號"] != "0"]
-        # 同步姓名修正
         for s in STUDENT_LIST:
             df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
         return df
@@ -48,17 +47,27 @@ def save_data(df):
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 
-# --- 3. 局部更新元件 (僅限管理員看見成績) ---
+# --- 3. 局部更新元件 (自定義顏色邏輯) ---
 @st.fragment
 def status_buttons(idx, row_key, show_score=False):
+    # 老師模式下分配欄位寬度
     if show_score:
         c_status, c_score, c_edit, c_done = st.columns([1.2, 1, 1, 1])
     else:
         c_status, c_edit, c_done = st.columns([1.5, 1, 1])
     
     current_status = st.session_state.main_df.at[idx, "繳交狀態"]
-    color = "red" if current_status == "未繳交" else "orange"
-    c_status.markdown(f":{color}[**{current_status}**]")
+    
+    # ✨ 顏色邏輯修正
+    if current_status == "未繳交":
+        color = "blue"  # Streamlit 的黃色常用 blue 或直接用 markdown 控制，這裡用語法糖
+        st_color = "yellow"
+    elif current_status == "需訂正":
+        st_color = "red"
+    else:
+        st_color = "green"
+        
+    c_status.markdown(f":{st_color}[**{current_status}**]")
     
     if show_score:
         current_score = str(st.session_state.main_df.at[idx, "成績"]) if not pd.isna(st.session_state.main_df.at[idx, "成績"]) else ""
@@ -67,12 +76,14 @@ def status_buttons(idx, row_key, show_score=False):
             st.session_state.main_df.at[idx, "成績"] = new_score
             save_data(st.session_state.main_df)
 
+    # 訂正按鈕 (左)
     if c_edit.button("訂正", key=f"btn_r_{row_key}_{idx}"):
         st.session_state.main_df.at[idx, "繳交狀態"] = "需訂正"
         st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
         save_data(st.session_state.main_df)
         st.rerun(scope="fragment")
 
+    # 已交按鈕 (右)
     if c_done.button("已交", key=f"btn_d_{row_key}_{idx}"):
         st.session_state.main_df.at[idx, "繳交狀態"] = "已繳交"
         st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
@@ -98,26 +109,26 @@ if menu == "🔍 學生查詢":
         if not res.empty:
             name = res.iloc[0]['姓名']
             st.subheader(f"👤 {name} 的作業狀況")
-            
-            # 找出尚未完成的作業 (未繳交 或 需訂正)
             todo = res[res["繳交狀態"] != "已繳交"]
             
             if todo.empty:
-                # ✨ 全部交齊的華麗慶祝
                 st.balloons()
                 st.success(f"🎊 太棒了，{name}！你目前沒有欠任何作業喔！")
-                st.info("繼續保持良好的學習習慣！")
             else:
-                # 還有欠交時的顯示
-                st.warning(f"注意：還有 {len(todo)} 項作業需要處理喔！")
-                student_view_df = res[["作業名稱", "繳交狀態", "更新日期"]].copy()
-                st.table(student_view_df)
+                st.warning(f"注意：還有 {len(todo)} 項作業需要處理！")
+                # 學生視角也套用顏色顯示 (表格內顏色需用 Pandas Styler 但會影響效能，這裡用清單呈現)
+                for idx, row in res.iterrows():
+                    c1, c2, c3 = st.columns([3, 2, 2])
+                    c1.write(f"📌 {row['作業名稱']}")
+                    # 顏色套用
+                    s_color = "red" if row['繳交狀態'] == "需訂正" else ("green" if row['繳交狀態'] == "已繳交" else "orange")
+                    c2.markdown(f":{s_color}[{row['繳交狀態']}]")
+                    c3.caption(f"更新：{row['更新日期']}")
             
             if is_admin:
                 st.divider()
                 st.write("🔧 管理員快速操作：")
-                manage_list = res[res["繳交狀態"] != "已繳交"]
-                for idx, row in manage_list.iterrows():
+                for idx, row in res[res["繳交狀態"] != "已繳交"].iterrows():
                     ca, cb = st.columns([2, 5])
                     ca.write(f"📌 {row['作業名稱']}")
                     with cb: status_buttons(idx, "query", show_score=True)
@@ -156,11 +167,10 @@ elif menu == "🛠️ 老師後台":
                         ra.write(f"📌 {r['作業名稱']}")
                         with r_frag:
                             status_buttons(i, "tab2", show_score=True)
-                    
                     st.divider()
                     st.markdown("### 🖨️ 欠交清單")
-                    clean_text = f"【作業催繳通知單】\n日期：{date.today().strftime('%m/%d')}\n座號：{tsid}  姓名：{name}\n--------------------\n"
                     todo_list = sm[sm["繳交狀態"] != "已繳交"]
+                    clean_text = f"【作業催繳通知單】\n日期：{date.today().strftime('%m/%d')}\n座號：{tsid}  姓名：{name}\n--------------------\n"
                     for _, row in todo_list.iterrows():
                         mark = "未交" if row['繳交狀態'] == "未繳交" else "訂正"
                         clean_text += f"□ {row['作業名稱']} ({mark})\n"
