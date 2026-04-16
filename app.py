@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-進階清理版", layout="wide")
+st.set_page_config(page_title="303作業登記-無成績清理版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單 (詹荺蓁 已更正)
@@ -40,7 +40,6 @@ def save_data(df):
     except:
         return False
 
-# 初始化資料
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 
@@ -104,12 +103,6 @@ if menu == "🔍 學生查詢":
                     s_color = "red" if row['繳交狀態'] == "需訂正" else "orange"
                     c2.markdown(f":{s_color}[{row['繳交狀態']}]")
                     c3.caption(f"登記：{row['更新日期']}")
-            if is_admin and not todo.empty:
-                st.divider(); st.write("🔧 管理員快速操作：")
-                for idx, row in todo.iterrows():
-                    ca, cb = st.columns([2, 5])
-                    ca.write(f"📌 {row['作業名稱']}")
-                    with cb: status_buttons(idx, "query_admin", show_score=True)
 
 # [老師後台]
 elif menu == "🛠️ 老師後台":
@@ -119,29 +112,29 @@ elif menu == "🛠️ 老師後台":
         all_df = st.session_state.main_df
         all_hws = all_df["作業名稱"].unique()
         
-        # ✨ 新的刪除邏輯：(交齊) 且 (每個人都有成績)
+        # ✨ 調整後的刪除邏輯：(交齊) 且 (完全沒有任何學生的成績欄位有填內容)
         ready_to_delete = []
         for hw in all_hws:
             hw_data = all_df[all_df["作業名稱"] == hw]
-            # 1. 檢查是否有人沒交 (包含需訂正)
+            # 1. 檢查是否有人沒交
             not_done = hw_data[hw_data["繳交狀態"] != "已繳交"]
-            # 2. 檢查是否有人沒打分數 (成績欄位是空字串、None 或空格)
-            no_score = hw_data[hw_data["成績"].apply(lambda x: str(x).strip() == "")]
+            # 2. 檢查是否「有人」有打分數 (只要任何一格有填東西就排除)
+            has_any_score = hw_data[hw_data["成績"].apply(lambda x: str(x).strip() != "")].shape[0] > 0
             
-            if len(not_done) == 0 and len(no_score) == 0:
+            if len(not_done) == 0 and not has_any_score:
                 ready_to_delete.append(hw)
 
         # 側邊欄顯示批次刪除
         if ready_to_delete:
             st.sidebar.divider()
-            st.sidebar.success(f"有 {len(ready_to_delete)} 項作業已交齊且完成評分")
-            if st.sidebar.button("🗑️ 批次刪除(已完成+已評分)"):
+            st.sidebar.warning(f"偵測到 {len(ready_to_delete)} 項『不需評分』且已交齊的作業")
+            if st.sidebar.button("🗑️ 批次刪除(已交齊+無成績)"):
                 st.session_state.main_df = all_df[~all_df["作業名稱"].isin(ready_to_delete)]
                 save_data(st.session_state.main_df)
                 st.sidebar.info("清理完成！")
                 st.rerun()
         else:
-            st.sidebar.info("目前沒有『既交齊又打完分數』的作業可供清理。")
+            st.sidebar.info("目前沒有『既交齊且完全無成績』的作業。")
 
         tab1, tab2, tab3 = st.tabs(["📋 缺交與登記成績", "🎯 單生管理", "📝 新增作業"])
         
@@ -151,7 +144,7 @@ elif menu == "🛠️ 老師後台":
             if sel != "請選擇":
                 target_hw = sel.split(" (欠")[0]
                 m = all_df[all_df["作業名稱"] == target_hw]
-                st.info("💡 成績欄位必須填寫（分數或文字），該作業才會被列入批次刪除範圍。")
+                st.warning("⚠️ 警告：若您想保留此紀錄，請至少在一位學生的成績欄填入任何內容。")
                 for i, r in m.iterrows():
                     ca, c_frag = st.columns([1.5, 6])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
@@ -167,14 +160,6 @@ elif menu == "🛠️ 老師後台":
                         ra, r_frag = st.columns([2, 6])
                         ra.write(f"📌 {r['作業名稱']}")
                         with r_frag: status_buttons(i, "tab2", show_score=True)
-                    st.divider(); st.markdown("### 🖨️ 催繳清單")
-                    todo_list = sm[sm["繳交狀態"] != "已繳交"]
-                    clean_text = f"【作業催繳通知單】\n日期：{date.today().strftime('%m/%d')}\n座號：{tsid}  姓名：{name}\n--------------------\n"
-                    for _, row in todo_list.iterrows():
-                        mark = "未交" if row['繳交狀態'] == "未繳交" else "訂正"
-                        clean_text += f"□ {row['作業名稱']} ({mark})\n"
-                    clean_text += "--------------------\n家長簽名：___________"
-                    st.text_area("複製通知文字", clean_text, height=150)
 
         with tab3:
             st.subheader("📝 新增作業")
