@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-判定優化版", layout="wide")
+st.set_page_config(page_title="303作業登記-效率優化版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -20,17 +20,12 @@ conn = st.connection("gsheets", type=GSheetsConnection)
 def load_data():
     try:
         df = conn.read(worksheet="Sheet1", ttl=0)
-        # 確保必要欄位存在
         for col in ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"]:
             if col not in df.columns:
                 df[col] = ""
-        
-        # 處理 NaN 轉為空字串，確保判定精準
         df = df.fillna("")
-        
         if df is None or df.empty:
             return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"])
-            
         df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
         df = df[df["座號"] != "0"]
         for s in STUDENT_LIST:
@@ -65,8 +60,6 @@ def status_buttons(idx, row_key, show_score=False):
     if show_score:
         raw_val = st.session_state.main_df.at[idx, "成績"]
         current_score = str(raw_val) if pd.notna(raw_val) and str(raw_val).strip() != "" else ""
-        
-        # 這裡的 placeholder="成績" 只是提示文字，不代表內容
         new_score = c_score.text_input("成績", value=current_score, key=f"score_{row_key}_{idx}", label_visibility="collapsed", placeholder="成績")
         if new_score != current_score:
             st.session_state.main_df.at[idx, "成績"] = new_score
@@ -122,19 +115,14 @@ elif menu == "🛠️ 老師後台":
         all_df = st.session_state.main_df
         all_hws = all_df["作業名稱"].unique()
         
-        # --- 側邊欄清理邏輯優化 ---
+        # 側邊欄清理邏輯
         st.sidebar.divider()
         st.sidebar.subheader("🗑️ 快速清理")
-        
         no_score_hws = []
         has_score_hws = []
-        
         for hw in all_hws:
             hw_data = all_df[all_df["作業名稱"] == hw]
-            # 判斷是否全班交齊
             if len(hw_data[hw_data["繳交狀態"] != "已繳交"]) == 0:
-                # ✨ 判定：如果所有學生的成績欄位去掉空白後都是空的，就屬於無成績作業
-                # 畫面上會顯示 placeholder "成績"，代表背後資料是空的
                 has_any_score = hw_data[hw_data["成績"].apply(lambda x: str(x).strip() != "")].shape[0] > 0
                 if has_any_score: has_score_hws.append(hw)
                 else: no_score_hws.append(hw)
@@ -159,22 +147,75 @@ elif menu == "🛠️ 老師後台":
         
         with tab1:
             ongoing_hws = [(hw, len(all_df[(all_df["作業名稱"] == hw) & (all_df["繳交狀態"] != "已繳交")])) for hw in all_hws]
-            sel = st.selectbox("選擇作業項目", ["請選擇"] + [f"{h} (欠 {c} 人)" for h, c in ongoing_hws])
+            
+            # 使用 session_state 來記住選擇的作業項目，防止重新整理後跑掉
+            if 'selected_hw' not in st.session_state:
+                st.session_state.selected_hw = "請選擇"
+            
+            # 建立選項清單
+            hw_options = ["請選擇"] + [f"{h} (欠 {c} 人)" for h, c in ongoing_hws]
+            
+            # 找到目前選擇項目的索引
+            current_index = 0
+            if st.session_state.selected_hw in hw_options:
+                current_index = hw_options.index(st.session_state.selected_hw)
+
+            sel = st.selectbox("選擇作業項目", hw_options, index=current_index)
+            st.session_state.selected_hw = sel # 更新 state
+
             if sel != "請選擇":
                 target_hw = sel.split(" (欠")[0]
+                
+                # --- 新增：座號快填區 ---
+                st.markdown("### ⚡ 座號快填")
+                qc1, qc2 = st.columns(2)
+                
+                # 已繳交快填
+                with qc1:
+                    fast_done = st.text_input("🟢 快速標記【已繳交】(輸入座號後按 Enter)", key="fast_done_input")
+                    if fast_done:
+                        # 處理輸入（支援單一號碼）
+                        sid_str = str(int(fast_done)) if fast_done.isdigit() else ""
+                        if sid_str:
+                            idx_list = all_df[(all_df["作業名稱"] == target_hw) & (all_df["座號"] == sid_done)].index
+                            # 由於我們需要精準匹配，直接用 df 邏輯更新
+                            mask = (st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["座號"] == sid_str)
+                            if not st.session_state.main_df[mask].empty:
+                                st.session_state.main_df.loc[mask, "繳交狀態"] = "已繳交"
+                                st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
+                                save_data(st.session_state.main_df)
+                                st.rerun() # 重新整理會清空輸入框，但因為 state 存在，清單不會跑掉
+
+                # 需訂正快填
+                with qc2:
+                    fast_edit = st.text_input("🔴 快速標記【需訂正】(輸入座號後按 Enter)", key="fast_edit_input")
+                    if fast_edit:
+                        sid_str = str(int(fast_edit)) if fast_edit.isdigit() else ""
+                        if sid_str:
+                            mask = (st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["座號"] == sid_str)
+                            if not st.session_state.main_df[mask].empty:
+                                st.session_state.main_df.loc[mask, "繳交狀態"] = "需訂正"
+                                st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
+                                save_data(st.session_state.main_df)
+                                st.rerun()
+
+                st.divider()
+                
+                # 顯示列表
                 m = all_df[all_df["作業名稱"] == target_hw]
-                st.info("💡 當成績顯示為灰色的『成績』時，代表尚未輸入，該作業可批次刪除。")
+                st.info("💡 當成績顯示為灰色的『成績』時，代表尚未輸入。")
                 for i, r in m.iterrows():
                     ca, c_frag = st.columns([1.5, 6])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
-                    with c_frag: status_buttons(i, "tab1", show_score=True)
+                    with c_frag: status_buttons(i, f"tab1_{target_hw}", show_score=True)
 
         with tab2:
-            tsid = st.text_input("座號管理：", key="tsid")
+            tsid = st.text_input("座號管理：", key="tsid_mgr")
             if tsid:
                 sm = all_df[(all_df["座號"] == str(tsid))]
                 if not sm.empty:
                     name = sm.iloc[0]['姓名']
+                    st.markdown(f"#### 👤 學生：{name}")
                     for i, r in sm.iterrows():
                         ra, r_frag = st.columns([2, 6])
                         ra.write(f"📌 {r['作業名稱']}")
