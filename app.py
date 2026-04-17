@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-絲滑操作版", layout="wide")
+st.set_page_config(page_title="303作業登記-穩定除錯版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -18,8 +18,20 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def force_int_str(val):
+    """ 強制將座號轉為乾淨的字串整數 """
     try: return str(int(float(val)))
-    except: return str(val)
+    except: return str(val).strip()
+
+def clean_score(val):
+    """ 智慧清除成績的 .0，保留文字或有效小數點 """
+    s = str(val).strip()
+    if s in ["", "nan", "NaN", "None"]: return ""
+    try:
+        f = float(s)
+        if f.is_integer(): return str(int(f)) # 95.0 -> 95
+        return str(f) # 95.5 -> 95.5
+    except:
+        return s # A+ -> A+
 
 def load_data():
     try:
@@ -28,6 +40,7 @@ def load_data():
             if col not in df.columns: df[col] = ""
         df = df.fillna("")
         df["座號"] = df["座號"].apply(force_int_str)
+        df["成績"] = df["成績"].apply(clean_score) # ✨ 讀取時過濾成績
         df = df[df["座號"] != ""]
         for s in STUDENT_LIST:
             df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
@@ -40,6 +53,7 @@ def save_data_core(df):
         if df.empty: return False
         df_to_save = df.copy().fillna("")
         df_to_save["座號"] = df_to_save["座號"].apply(force_int_str)
+        df_to_save["成績"] = df_to_save["成績"].apply(clean_score) # ✨ 存檔前再次過濾
         conn.update(worksheet="Sheet1", data=df_to_save)
         return True
     except: return False
@@ -71,7 +85,7 @@ def mark_fast(hw_name, status, input_key):
         st.session_state.main_df.loc[mask, "繳交狀態"] = status
         st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
     st.session_state.has_unsaved_changes = True
-    st.session_state[input_key] = "" # 自動清空輸入框
+    st.session_state[input_key] = "" 
 
 def update_single_status(idx, status):
     st.session_state.main_df.at[idx, "繳交狀態"] = status
@@ -79,7 +93,7 @@ def update_single_status(idx, status):
     st.session_state.has_unsaved_changes = True
 
 def update_score(idx, score_key):
-    new_val = st.session_state[score_key]
+    new_val = clean_score(st.session_state[score_key]) # ✨ 即時過濾輸入的成績
     if str(st.session_state.main_df.at[idx, "成績"]) != new_val:
         st.session_state.main_df.at[idx, "成績"] = new_val
         st.session_state.has_unsaved_changes = True
@@ -141,7 +155,6 @@ elif menu == "🛠️ 老師後台":
             hw_names = ["請選擇"] + all_hws
             hw_display = ["請選擇"] + [f"{hw} (欠 {len(st.session_state.main_df[(st.session_state.main_df['作業名稱'] == hw) & (st.session_state.main_df['繳交狀態'] != '已繳交')])} 人)" for hw in all_hws]
             
-            # 尋找上次選中的作業 (絕對防跳頁機制)
             current_index = 0
             if st.session_state.selected_hw_base in hw_names:
                 current_index = hw_names.index(st.session_state.selected_hw_base)
@@ -175,6 +188,26 @@ elif menu == "🛠️ 老師後台":
                     
                     score_key = f"sc_{target_hw}_{i}"
                     ce.text_input("成績", value=str(r['成績']), key=score_key, label_visibility="collapsed", placeholder="成績", on_change=update_score, args=(i, score_key))
+
+        with tab2:
+            tsid = st.text_input("管理座號：", key="tsid_mgr")
+            if tsid:
+                clean_tsid = force_int_str(tsid) # ✨ 修復：加入座號校正，確保叫得出資料
+                sm = st.session_state.main_df[st.session_state.main_df["座號"] == clean_tsid]
+                if not sm.empty:
+                    name = sm.iloc[0]['姓名']
+                    st.markdown(f"#### 👤 管理對象：{name}")
+                    for i, r in sm.iterrows():
+                        ra, rb, rc, rd = st.columns([3, 2, 1, 1])
+                        ra.write(f"📌 {r['作業名稱']}")
+                        color = "red" if r['繳交狀態'] == "需訂正" else ("orange" if r['繳交狀態'] == "未繳交" else "green")
+                        rb.markdown(f":{color}[**{r['繳交狀態']}**]")
+                        
+                        # ✨ 優化：單生管理的按鈕也升級成不閃爍版本
+                        rc.button("訂正", key=f"t2_r_{i}", on_click=update_single_status, args=(i, "需訂正"))
+                        rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
+                else:
+                    st.info("找不到該座號的資料，請確認輸入是否正確。")
 
         with tab3:
             st.subheader("📝 新增作業")
