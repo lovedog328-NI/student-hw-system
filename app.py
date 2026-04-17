@@ -170,4 +170,33 @@ elif menu == "🛠️ 老師後台":
                             if any(mask):
                                 st.session_state.main_df.loc[mask, "繳交狀態"] = "需訂正"
                                 st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
-                        save_data(st.session_
+                        save_data(st.session_state.main_df)
+                        st.rerun()
+                
+                st.divider()
+                # 原始條列式清單 (方便對名字或打成績)
+                m = all_df[all_df["作業名稱"] == target_hw]
+                for i, r in m.iterrows():
+                    ca, c_frag = st.columns([1.5, 6])
+                    ca.write(f"**{r['座號']}. {r['姓名']}**")
+                    with c_frag: status_buttons(i, "tab1", show_score=True)
+
+        with tab2:
+            tsid = st.text_input("座號管理：", key="tsid")
+            if tsid:
+                sm = all_df[(all_df["座號"] == str(tsid))]
+                if not sm.empty:
+                    name = sm.iloc[0]['姓名']
+                    for i, r in sm.iterrows():
+                        ra, r_frag = st.columns([2, 6])
+                        ra.write(f"📌 {r['作業名稱']}")
+                        with r_frag: status_buttons(i, "tab2", show_score=True)
+
+        with tab3:
+            st.subheader("📝 新增作業")
+            nhw = st.text_input("作業名稱：")
+            if st.button("🚀 確認發佈"):
+                new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
+                st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
+                save_data(st.session_state.main_df)
+                st.success("發佈成功！"); st.rerun()
