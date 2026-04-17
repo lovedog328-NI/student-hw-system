@@ -4,10 +4,9 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-座號純淨版", layout="wide")
+st.set_page_config(page_title="303作業登記-記憶選單版", layout="wide")
 st.title("📚 303 作業登記系統")
 
-# 固定正確名單
 STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "王瑀淮", "李祐嘉", "郭晁瑋", "廖勇傑", "潘彥廷", "郭家宇", "王悅芯", "劉橙",
     "洪語緹", "林祈平", "鄧安晴", "蔣語桐", "邱薇瑀", "鍾芮昕", "詹荺蓁", "劉姝言",
@@ -22,31 +21,17 @@ def load_data():
         df = conn.read(worksheet="Sheet1", ttl=0)
         if df is None or df.empty:
             return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"])
-        
-        # 補齊欄位
         for col in ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"]:
             if col not in df.columns: df[col] = ""
-        
         df = df.fillna("")
-
-        # ✨ 強力校正座號：處理 1.0, "1.0", 或是 NaN
+        # 強制校正座號格式
         def force_int_str(val):
-            try:
-                # 處理浮點數字串或數字轉為整數再轉字串
-                return str(int(float(val)))
-            except (ValueError, TypeError):
-                # 處理原本就是空或非數字的情況
-                return ""
-
+            try: return str(int(float(val)))
+            except: return ""
         df["座號"] = df["座號"].apply(force_int_str)
-        
-        # 移除座號為空的異常資料
         df = df[df["座號"] != ""]
-        
-        # 強制同步正確姓名
         for s in STUDENT_LIST:
             df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
-            
         return df
     except:
         return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"])
@@ -54,12 +39,6 @@ def load_data():
 def save_data_core(df):
     try:
         if df.empty: return False
-        # ✨ 存檔前最後檢查座號格式
-        def final_clean(val):
-            try: return str(int(float(val)))
-            except: return str(val)
-        
-        df["座號"] = df["座號"].apply(final_clean)
         df = df.fillna("")
         conn.update(worksheet="Sheet1", data=df)
         return True
@@ -70,6 +49,9 @@ if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 if 'has_unsaved_changes' not in st.session_state:
     st.session_state.has_unsaved_changes = False
+# ✨ 新增：用來記憶目前選中的作業名稱
+if 'current_hw_selection' not in st.session_state:
+    st.session_state.current_hw_selection = "請選擇"
 
 # --- 3. 側邊欄 ---
 st.sidebar.title("⚙️ 管理選單")
@@ -84,15 +66,13 @@ if is_admin:
                 st.session_state.has_unsaved_changes = False
                 st.sidebar.success("✅ 同步成功！")
                 st.rerun()
-    else:
-        st.sidebar.success("✔️ 雲端資料已同步")
 
 if st.sidebar.button("🔄 重新整理資料"):
     st.session_state.main_df = load_data()
     st.session_state.has_unsaved_changes = False
     st.rerun()
 
-# --- 4. 局部更新元件 (零跳轉區) ---
+# --- 4. 局部更新元件 (座號快填) ---
 @st.fragment
 def quick_entry_area(target_hw):
     st.markdown(f"#### ⚡ 座號快填 - {target_hw}")
@@ -102,7 +82,6 @@ def quick_entry_area(target_hw):
         if sid_done:
             sids = [s.strip() for s in sid_done.replace("，", ",").split(",") if s.strip()]
             for sid in sids:
-                # 這裡也要清理輸入的座號格式
                 try: clean_sid = str(int(float(sid)))
                 except: clean_sid = sid
                 mask = (st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["座號"] == clean_sid)
@@ -153,26 +132,51 @@ elif menu == "🛠️ 老師後台":
     else:
         tab1, tab2, tab3 = st.tabs(["📋 登記成績", "🎯 單生管理", "📝 新增作業"])
         with tab1:
-            all_hws = st.session_state.main_df["作業名稱"].unique()
-            hw_options = [f"{hw} (欠 {len(st.session_state.main_df[(st.session_state.main_df['作業名稱'] == hw) & (st.session_state.main_df['繳交狀態'] != '已繳交')])} 人)" for hw in all_hws]
-            sel_display = st.selectbox("選擇作業項目", ["請選擇"] + hw_options)
+            all_hws = list(st.session_state.main_df["作業名稱"].unique())
+            # 建立選單選項
+            hw_options = ["請選擇"] + [f"{hw} (欠 {len(st.session_state.main_df[(st.session_state.main_df['作業名稱'] == hw) & (st.session_state.main_df['繳交狀態'] != '已繳交')])} 人)" for hw in all_hws]
+            
+            # ✨ 找出上次選中的作業在目前選項中的索引位置
+            default_index = 0
+            if st.session_state.current_hw_selection != "請選擇":
+                for i, opt in enumerate(hw_options):
+                    if opt.startswith(st.session_state.current_hw_selection + " (欠"):
+                        default_index = i
+                        break
+
+            sel_display = st.selectbox("選擇作業項目", hw_options, index=default_index)
+            
             if sel_display != "請選擇":
-                target_hw = sel_display.split(" (欠")[0]
+                # ✨ 記錄目前選中的作業
+                st.session_state.current_hw_selection = sel_display.split(" (欠")[0]
+                target_hw = st.session_state.current_hw_selection
+                
                 quick_entry_area(target_hw)
                 st.divider()
+                
                 m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
                 for i, r in m.iterrows():
                     ca, cb, cc, cd, ce = st.columns([1, 1.2, 1, 1, 1])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
                     color = "red" if r['繳交狀態'] == "需訂正" else ("orange" if r['繳交狀態'] == "未繳交" else "green")
                     cb.markdown(f":{color}[**{r['繳交狀態']}**]")
+                    
                     if cc.button("訂正", key=f"r_{target_hw}_{i}"):
-                        st.session_state.main_df.at[i, "繳交狀態"] = "需訂正"; st.session_state.has_unsaved_changes = True; st.rerun()
+                        st.session_state.main_df.at[i, "繳交狀態"] = "需訂正"
+                        st.session_state.has_unsaved_changes = True
+                        st.rerun() # 重新整理後 selectbox 會根據 index 自動選回原作業
+                        
                     if cd.button("已交", key=f"d_{target_hw}_{i}"):
-                        st.session_state.main_df.at[i, "繳交狀態"] = "已繳交"; st.session_state.has_unsaved_changes = True; st.rerun()
-                    sc = ce.text_input("成績", value=str(r['成績']), key=f"sc_{target_hw}_{i}", label_visibility="collapsed")
+                        st.session_state.main_df.at[i, "繳交狀態"] = "已繳交"
+                        st.session_state.has_unsaved_changes = True
+                        st.rerun()
+                        
+                    sc = ce.text_input("成績", value=str(r['成績']), key=f"sc_{target_hw}_{i}", label_visibility="collapsed", placeholder="成績")
                     if sc != str(r['成績']):
-                        st.session_state.main_df.at[i, "成績"] = sc; st.session_state.has_unsaved_changes = True
+                        st.session_state.main_df.at[i, "成績"] = sc
+                        st.session_state.has_unsaved_changes = True
+            else:
+                st.session_state.current_hw_selection = "請選擇"
 
         with tab3:
             st.subheader("📝 新增作業")
