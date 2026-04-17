@@ -4,10 +4,9 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-座號快填版", layout="wide")
+st.set_page_config(page_title="303作業登記-零跳轉版", layout="wide")
 st.title("📚 303 作業登記系統")
 
-# 固定學生名單
 STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "王瑀淮", "李祐嘉", "郭晁瑋", "廖勇傑", "潘彥廷", "郭家宇", "王悅芯", "劉橙",
     "洪語緹", "林祈平", "鄧安晴", "蔣語桐", "邱薇瑀", "鍾芮昕", "詹荺蓁", "劉姝言",
@@ -23,8 +22,6 @@ def load_data():
         for col in ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"]:
             if col not in df.columns: df[col] = ""
         df = df.fillna("")
-        if df is None or df.empty:
-            return pd.DataFrame(columns=["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"])
         df["座號"] = pd.to_numeric(df["座號"], errors='coerce').fillna(0).astype(int).astype(str)
         df = df[df["座號"] != "0"]
         for s in STUDENT_LIST:
@@ -43,7 +40,7 @@ def save_data(df):
 if 'main_df' not in st.session_state:
     st.session_state.main_df = load_data()
 
-# --- 3. 局部更新元件 ---
+# --- 3. 局部更新元件：學生狀態按鈕 ---
 @st.fragment
 def status_buttons(idx, row_key, show_score=False):
     if show_score:
@@ -75,7 +72,40 @@ def status_buttons(idx, row_key, show_score=False):
         save_data(st.session_state.main_df)
         st.rerun(scope="fragment")
 
-# --- 4. UI 介面 ---
+# --- 4. 局部更新元件：座號快填區 (修正跳轉關鍵) ---
+@st.fragment
+def fast_entry_section(target_hw):
+    st.markdown(f"### ⚡ 座號快填 - {target_hw}")
+    q_col1, q_col2 = st.columns(2)
+    
+    with q_col1:
+        # 增加 on_change 邏輯，並使用特殊的 key 確保每次重新渲染都重設
+        fast_done = st.text_input("🟢 標記【已繳交】(座號)", key=f"fd_{target_hw}", placeholder="例：1,2,3")
+        if fast_done:
+            sids = [s.strip() for s in fast_done.replace("，", ",").split(",") if s.strip()]
+            for sid in sids:
+                mask = (st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["座號"] == sid)
+                if any(mask):
+                    st.session_state.main_df.loc[mask, "繳交狀態"] = "已繳交"
+                    st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
+            save_data(st.session_state.main_df)
+            st.toast("已更新繳交狀態")
+            st.rerun(scope="fragment") # ✨ 關鍵：僅刷新此片段，不刷新全頁
+
+    with q_col2:
+        fast_edit = st.text_input("🔴 標記【需訂正】(座號)", key=f"fe_{target_hw}", placeholder="例：5,6")
+        if fast_edit:
+            sids = [s.strip() for s in fast_edit.replace("，", ",").split(",") if s.strip()]
+            for sid in sids:
+                mask = (st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["座號"] == sid)
+                if any(mask):
+                    st.session_state.main_df.loc[mask, "繳交狀態"] = "需訂正"
+                    st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
+            save_data(st.session_state.main_df)
+            st.toast("已更新訂正狀態")
+            st.rerun(scope="fragment") # ✨ 關鍵：僅刷新此片段，不刷新全頁
+
+# --- 5. UI 介面 ---
 st.sidebar.title("⚙️ 管理選單")
 pwd = st.sidebar.text_input("老師密碼", type="password")
 is_admin = (pwd == "alice")
@@ -86,7 +116,6 @@ if st.sidebar.button("🔄 同步最新雲端資料"):
 
 menu = st.sidebar.radio("切換功能", ["🔍 學生查詢", "🛠️ 老師後台"])
 
-# [學生查詢]
 if menu == "🔍 學生查詢":
     sid = st.text_input("輸入座號查詢 (1-22)：")
     if sid:
@@ -105,7 +134,6 @@ if menu == "🔍 學生查詢":
                     c2.markdown(f":{s_color}[{row['繳交狀態']}]")
                     c3.caption(f"登記：{row['更新日期']}")
 
-# [老師後台]
 elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("⚠️ 請輸入正確密碼。")
@@ -113,27 +141,20 @@ elif menu == "🛠️ 老師後台":
         all_df = st.session_state.main_df
         all_hws = all_df["作業名稱"].unique()
         
-        # 側邊欄清理區 (維持上一版邏輯)
+        # 側邊欄批次刪除功能
         st.sidebar.divider()
-        st.sidebar.subheader("🗑️ 快速清理")
         no_score_hws, has_score_hws = [], []
         for hw in all_hws:
             hw_data = all_df[all_df["作業名稱"] == hw]
             if len(hw_data[hw_data["繳交狀態"] != "已繳交"]) == 0:
                 if hw_data[hw_data["成績"].apply(lambda x: str(x).strip() != "")].shape[0] > 0: has_score_hws.append(hw)
                 else: no_score_hws.append(hw)
-        if no_score_hws:
-            if st.sidebar.button(f"🗑️ 批次刪除 {len(no_score_hws)} 項無成績作業"):
-                st.session_state.main_df = all_df[~all_df["作業名稱"].isin(no_score_hws)]
-                save_data(st.session_state.main_df)
-                st.rerun()
+        if no_score_hws and st.sidebar.button(f"🗑️ 批次刪除 {len(no_score_hws)} 項無成績作業"):
+            st.session_state.main_df = all_df[~all_df["作業名稱"].isin(no_score_hws)]; save_data(st.session_state.main_df); st.rerun()
         if has_score_hws:
             st.sidebar.error("⚠️ 偵測到含成績紀錄")
-            if st.sidebar.checkbox("確定刪除含成績作業"):
-                if st.sidebar.button(f"🔥 強制刪除 {len(has_score_hws)} 項"):
-                    st.session_state.main_df = all_df[~all_df["作業名稱"].isin(has_score_hws)]
-                    save_data(st.session_state.main_df)
-                    st.rerun()
+            if st.sidebar.checkbox("確定刪除含成績作業") and st.sidebar.button(f"🔥 強制刪除 {len(has_score_hws)} 項"):
+                st.session_state.main_df = all_df[~all_df["作業名稱"].isin(has_score_hws)]; save_data(st.session_state.main_df); st.rerun()
 
         tab1, tab2, tab3 = st.tabs(["📋 缺交與登記成績", "🎯 單生管理", "📝 新增作業"])
         
@@ -144,53 +165,28 @@ elif menu == "🛠️ 老師後台":
             if sel != "請選擇":
                 target_hw = sel.split(" (欠")[0]
                 
-                # ✨ 新功能：座號快速標記區 ✨
-                st.markdown(f"### ⚡ 座號快填 - {target_hw}")
-                q_col1, q_col2 = st.columns(2)
-                
-                with q_col1:
-                    fast_done = st.text_input("🟢 輸入座號標記【已繳交】", key="fast_done", placeholder="例：1 或是 1,2,3")
-                    if fast_done:
-                        # 支援單個或多個座號輸入
-                        sids = [s.strip() for s in fast_done.replace("，", ",").split(",")]
-                        for sid in sids:
-                            mask = (st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["座號"] == sid)
-                            if any(mask):
-                                st.session_state.main_df.loc[mask, "繳交狀態"] = "已繳交"
-                                st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
-                        save_data(st.session_state.main_df)
-                        st.rerun()
-
-                with q_col2:
-                    fast_edit = st.text_input("🔴 輸入座號標記【需訂正】", key="fast_edit", placeholder="例：5")
-                    if fast_edit:
-                        sids = [s.strip() for s in fast_edit.replace("，", ",").split(",")]
-                        for sid in sids:
-                            mask = (st.session_state.main_df["作業名稱"] == target_hw) & (st.session_state.main_df["座號"] == sid)
-                            if any(mask):
-                                st.session_state.main_df.loc[mask, "繳交狀態"] = "需訂正"
-                                st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
-                        save_data(st.session_state.main_df)
-                        st.rerun()
+                # ✨ 呼叫局部更新的快填區 ✨
+                fast_entry_section(target_hw)
                 
                 st.divider()
-                # 原始條列式清單 (方便對名字或打成績)
+                # 這裡的列表建議也包在局部更新裡，或是讓它隨全頁狀態顯示
                 m = all_df[all_df["作業名稱"] == target_hw]
                 for i, r in m.iterrows():
                     ca, c_frag = st.columns([1.5, 6])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
-                    with c_frag: status_buttons(i, "tab1", show_score=True)
+                    with c_frag: status_buttons(i, "tab1_list", show_score=True)
 
         with tab2:
-            tsid = st.text_input("座號管理：", key="tsid")
+            tsid = st.text_input("座號管理：", key="tsid_input")
             if tsid:
                 sm = all_df[(all_df["座號"] == str(tsid))]
                 if not sm.empty:
                     name = sm.iloc[0]['姓名']
+                    st.write(f"管理：**{name}**")
                     for i, r in sm.iterrows():
                         ra, r_frag = st.columns([2, 6])
                         ra.write(f"📌 {r['作業名稱']}")
-                        with r_frag: status_buttons(i, "tab2", show_score=True)
+                        with r_frag: status_buttons(i, "tab2_list", show_score=True)
 
         with tab3:
             st.subheader("📝 新增作業")
