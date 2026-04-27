@@ -3,8 +3,66 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date
 
-# --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-全班總覽版", layout="wide")
+# --- 1. 基本設定與精美 CSS 樣式 ---
+st.set_page_config(page_title="303作業登記-精美公佈欄", layout="wide")
+
+# ✨ 植入精美卡片的 CSS 樣式
+st.markdown("""
+<style>
+.student-card {
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 16px;
+    background: var(--background-color);
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border-top: 4px solid #4CAF50;
+}
+.student-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+}
+.student-name {
+    margin-top: 0;
+    margin-bottom: 12px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--text-color);
+}
+.hw-tag-red {
+    background-color: rgba(211, 47, 47, 0.1);
+    color: #d32f2f;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    display: inline-block;
+    margin: 4px 4px 4px 0;
+    border: 1px solid rgba(211, 47, 47, 0.2);
+}
+.hw-tag-orange {
+    background-color: rgba(230, 81, 0, 0.1);
+    color: #e65100;
+    padding: 6px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    display: inline-block;
+    margin: 4px 4px 4px 0;
+    border: 1px solid rgba(230, 81, 0, 0.2);
+}
+.empty-state {
+    text-align: center;
+    padding: 50px;
+    background-color: rgba(76, 175, 80, 0.1);
+    border-radius: 15px;
+    border: 2px dashed #4CAF50;
+    color: #2E7D32;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -100,8 +158,13 @@ def on_hw_select():
     st.session_state.selected_hw_base = sel_str.split(" (")[0] if sel_str != "請選擇" else "請選擇"
 
 # --- 5. 側邊欄與存檔 ---
-st.sidebar.title("⚙️ 管理選單")
-pwd = st.sidebar.text_input("老師密碼", type="password")
+st.sidebar.title("⚙️ 選單與功能")
+
+# ✨ 改為三個選單，把公佈欄放在公開區域
+menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "🔍 個人查詢", "🛠️ 老師後台"])
+
+st.sidebar.divider()
+pwd = st.sidebar.text_input("老師密碼 (管理員專用)", type="password")
 is_admin = (pwd == "alice")
 
 if is_admin:
@@ -115,157 +178,28 @@ if is_admin:
     else:
         st.sidebar.success("✔️ 雲端資料已同步")
 
-if st.sidebar.button("🔄 重新載入雲端"):
+if st.sidebar.button("🔄 重新載入最新資料"):
     st.session_state.main_df = load_data()
     st.session_state.has_unsaved_changes = False
     st.rerun()
 
 # --- 6. 主畫面 UI ---
-menu = st.sidebar.radio("切換功能", ["🔍 學生查詢", "🛠️ 老師後台"])
 
-if menu == "🔍 學生查詢":
-    sid = st.text_input("輸入座號查詢 (1-22)：")
-    if sid:
-        clean_id = force_int_str(sid)
-        res = st.session_state.main_df[st.session_state.main_df["座號"] == clean_id]
-        if not res.empty:
-            name = res.iloc[0]['姓名']
-            st.subheader(f"👤 {name} 的待辦作業")
-            todo = res[res["繳交狀態"] != "已繳交"]
-            if todo.empty:
-                st.balloons(); st.success("🎊 沒有欠作業喔！")
-            else:
-                for idx, row in todo.iterrows():
-                    ca, cb = st.columns([3, 1])
-                    ca.write(f"📌 **{row['作業名稱']}**")
-                    color = "red" if row['繳交狀態'] == "需訂正" else "orange"
-                    cb.markdown(f":{color}[{row['繳交狀態']}]")
-
-elif menu == "🛠️ 老師後台":
-    if not is_admin:
-        st.warning("⚠️ 請輸入老師密碼。")
+# [分頁 1：班級公佈欄 (學生/家長皆可看)]
+if menu == "📊 班級公佈欄":
+    st.markdown("### 🏆 目前全班未完成作業總覽")
+    st.caption(f"最後更新日期：{date.today().strftime('%Y-%m-%d')}")
+    
+    todo_df = st.session_state.main_df[st.session_state.main_df["繳交狀態"] != "已繳交"]
+    
+    if todo_df.empty:
+        st.balloons()
+        st.markdown("""
+        <div class="empty-state">
+            <h1>🎉 太棒了！</h1>
+            <h3>全班目前的作業皆已繳交完成！</h3>
+            <p>請繼續保持這個好習慣喔！</p>
+        </div>
+        """, unsafe_allow_html=True)
     else:
-        # ✨ 新增 tab0 總覽分頁
-        tab0, tab1, tab2, tab3 = st.tabs(["📊 班級缺交總覽", "📋 登記成績", "🎯 單生管理", "📝 新增作業"])
-        
-        with tab0:
-            st.markdown("### 📊 目前全班缺交與訂正名單")
-            todo_df = st.session_state.main_df[st.session_state.main_df["繳交狀態"] != "已繳交"]
-            
-            if todo_df.empty:
-                st.balloons()
-                st.success("🎉 太棒了！全班目前的作業皆已繳交完成！")
-            else:
-                # 準備複製給家長的文字
-                copy_text = f"【作業缺交/訂正提醒】\n更新日期：{date.today().strftime('%m/%d')}\n------------------------\n"
-                
-                # 取得有欠作業的學生座號並排序
-                todo_sids = sorted(todo_df["座號"].unique(), key=lambda x: int(x))
-                
-                # 建立 4 個欄位來排版
-                cols = st.columns(4)
-                
-                for idx, sid in enumerate(todo_sids):
-                    student_data = todo_df[todo_df["座號"] == sid]
-                    name = student_data.iloc[0]["姓名"]
-                    
-                    # 畫面顯示卡片
-                    with cols[idx % 4]:
-                        st.markdown(f"##### {sid}. {name}")
-                        tasks_for_copy = []
-                        for _, row in student_data.iterrows():
-                            hw_name = row['作業名稱']
-                            status = row['繳交狀態']
-                            color = "red" if status == "需訂正" else "orange"
-                            st.markdown(f"- 📌 {hw_name} (:{color}[{status}])")
-                            
-                            # 簡化文字版狀態
-                            short_status = "未交" if status == "未繳交" else "訂正"
-                            tasks_for_copy.append(f"{hw_name}({short_status})")
-                        st.write("---")
-                    
-                    # 加入文字版清單
-                    copy_text += f"{sid}.{name}： " + "、".join(tasks_for_copy) + "\n"
-                
-                copy_text += "------------------------\n麻煩家長協助叮嚀，謝謝！"
-                
-                st.divider()
-                st.markdown("#### 📋 群組推播文字 (可直接全選複製)")
-                st.text_area("複製區", copy_text, height=200, label_visibility="collapsed")
-
-        with tab1:
-            all_hws = list(st.session_state.main_df["作業名稱"].unique())
-            hw_names = ["請選擇"] + all_hws
-            hw_display = ["請選擇"] + [f"{hw} (欠 {len(st.session_state.main_df[(st.session_state.main_df['作業名稱'] == hw) & (st.session_state.main_df['繳交狀態'] != '已繳交')])} 人)" for hw in all_hws]
-            
-            current_index = 0
-            if st.session_state.selected_hw_base in hw_names:
-                current_index = hw_names.index(st.session_state.selected_hw_base)
-            
-            st.selectbox("選擇作業項目", hw_display, index=current_index, key="hw_sel_widget", on_change=on_hw_select)
-            
-            target_hw = st.session_state.selected_hw_base
-            if target_hw != "請選擇":
-                st.markdown(f"### ⚡ 座號快填 - {target_hw}")
-                c1, c2 = st.columns(2)
-                done_key = f"fd_{target_hw}"
-                edit_key = f"fe_{target_hw}"
-                
-                with c1:
-                    st.text_input("🟢 快速標記【已繳交】(Enter送出)", key=done_key, placeholder="例: 1,3,5", on_change=mark_fast, args=(target_hw, "已繳交", done_key))
-                with c2:
-                    st.text_input("🔴 快速標記【需訂正】(Enter送出)", key=edit_key, placeholder="例: 12", on_change=mark_fast, args=(target_hw, "需訂正", edit_key))
-
-                st.divider()
-                st.info("💡 提醒：輸入座號後按下 Enter，清單會立即更新，輸入框也會自動清空。")
-                
-                m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
-                for i, r in m.iterrows():
-                    ca, cb, cc, cd, ce = st.columns([1.2, 1.2, 1, 1, 1.2])
-                    ca.write(f"**{r['座號']}. {r['姓名']}**")
-                    color = "red" if r['繳交狀態'] == "需訂正" else ("orange" if r['繳交狀態'] == "未繳交" else "green")
-                    cb.markdown(f":{color}[**{r['繳交狀態']}**]")
-                    
-                    cc.button("訂正", key=f"r_{target_hw}_{i}", on_click=update_single_status, args=(i, "需訂正"))
-                    cd.button("已交", key=f"d_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交"))
-                    
-                    score_key = f"sc_{target_hw}_{i}"
-                    ce.text_input("成績", value=str(r['成績']), key=score_key, label_visibility="collapsed", placeholder="成績", on_change=update_score, args=(i, score_key))
-
-        with tab2:
-            tsid = st.text_input("管理座號：", key="tsid_mgr")
-            if tsid:
-                clean_tsid = force_int_str(tsid)
-                sm = st.session_state.main_df[st.session_state.main_df["座號"] == clean_tsid]
-                if not sm.empty:
-                    name = sm.iloc[0]['姓名']
-                    st.markdown(f"#### 👤 管理對象：{name}")
-                    for i, r in sm.iterrows():
-                        ra, rb, rc, rd = st.columns([3, 2, 1, 1])
-                        ra.write(f"📌 {r['作業名稱']}")
-                        color = "red" if r['繳交狀態'] == "需訂正" else ("orange" if r['繳交狀態'] == "未繳交" else "green")
-                        rb.markdown(f":{color}[**{r['繳交狀態']}**]")
-                        
-                        rc.button("訂正", key=f"t2_r_{i}", on_click=update_single_status, args=(i, "需訂正"))
-                        rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
-                else:
-                    st.info("找不到該座號的資料，請確認輸入是否正確。")
-
-        with tab3:
-            st.subheader("📝 新增作業")
-            nhw = st.text_input("作業名稱：")
-            if st.button("🚀 確認發佈"):
-                new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
-                st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
-                st.session_state.has_unsaved_changes = True
-                st.rerun()
-
-# 側邊欄清理功能
-if is_admin:
-    st.sidebar.divider()
-    with st.sidebar.expander("🗑️ 快速清理作業"):
-        target = st.selectbox("選取要刪除的作業", ["請選擇"] + list(st.session_state.main_df["作業名稱"].unique()))
-        if st.button("確認刪除") and target != "請選擇":
-            st.session_state.main_df = st.session_state.main_df[st.session_state.main_df["作業名稱"] != target]
-            st.session_state.has_unsaved_changes = True
-            st.rerun()
+        todo_sids = sorted
