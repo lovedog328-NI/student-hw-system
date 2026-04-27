@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date
 
 # --- 1. 基本設定 ---
-st.set_page_config(page_title="303作業登記-穩定除錯版", layout="wide")
+st.set_page_config(page_title="303作業登記-全班總覽版", layout="wide")
 st.title("📚 303 作業登記系統")
 
 # 固定學生名單
@@ -18,20 +18,18 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def force_int_str(val):
-    """ 強制將座號轉為乾淨的字串整數 """
     try: return str(int(float(val)))
     except: return str(val).strip()
 
 def clean_score(val):
-    """ 智慧清除成績的 .0，保留文字或有效小數點 """
     s = str(val).strip()
     if s in ["", "nan", "NaN", "None"]: return ""
     try:
         f = float(s)
-        if f.is_integer(): return str(int(f)) # 95.0 -> 95
-        return str(f) # 95.5 -> 95.5
+        if f.is_integer(): return str(int(f))
+        return str(f)
     except:
-        return s # A+ -> A+
+        return s
 
 def load_data():
     try:
@@ -40,7 +38,7 @@ def load_data():
             if col not in df.columns: df[col] = ""
         df = df.fillna("")
         df["座號"] = df["座號"].apply(force_int_str)
-        df["成績"] = df["成績"].apply(clean_score) # ✨ 讀取時過濾成績
+        df["成績"] = df["成績"].apply(clean_score)
         df = df[df["座號"] != ""]
         for s in STUDENT_LIST:
             df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
@@ -53,7 +51,7 @@ def save_data_core(df):
         if df.empty: return False
         df_to_save = df.copy().fillna("")
         df_to_save["座號"] = df_to_save["座號"].apply(force_int_str)
-        df_to_save["成績"] = df_to_save["成績"].apply(clean_score) # ✨ 存檔前再次過濾
+        df_to_save["成績"] = df_to_save["成績"].apply(clean_score)
         conn.update(worksheet="Sheet1", data=df_to_save)
         return True
     except: return False
@@ -66,8 +64,7 @@ if 'has_unsaved_changes' not in st.session_state:
 if 'selected_hw_base' not in st.session_state:
     st.session_state.selected_hw_base = "請選擇"
 
-# --- 4. Callbacks (背景更新邏輯，不閃畫面) ---
-
+# --- 4. Callbacks ---
 def clean_seat_input(val_str):
     raw_list = val_str.replace("，", ",").split(",")
     res = []
@@ -93,7 +90,7 @@ def update_single_status(idx, status):
     st.session_state.has_unsaved_changes = True
 
 def update_score(idx, score_key):
-    new_val = clean_score(st.session_state[score_key]) # ✨ 即時過濾輸入的成績
+    new_val = clean_score(st.session_state[score_key])
     if str(st.session_state.main_df.at[idx, "成績"]) != new_val:
         st.session_state.main_df.at[idx, "成績"] = new_val
         st.session_state.has_unsaved_changes = True
@@ -148,8 +145,54 @@ elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("⚠️ 請輸入老師密碼。")
     else:
-        tab1, tab2, tab3 = st.tabs(["📋 登記成績", "🎯 單生管理", "📝 新增作業"])
+        # ✨ 新增 tab0 總覽分頁
+        tab0, tab1, tab2, tab3 = st.tabs(["📊 班級缺交總覽", "📋 登記成績", "🎯 單生管理", "📝 新增作業"])
         
+        with tab0:
+            st.markdown("### 📊 目前全班缺交與訂正名單")
+            todo_df = st.session_state.main_df[st.session_state.main_df["繳交狀態"] != "已繳交"]
+            
+            if todo_df.empty:
+                st.balloons()
+                st.success("🎉 太棒了！全班目前的作業皆已繳交完成！")
+            else:
+                # 準備複製給家長的文字
+                copy_text = f"【作業缺交/訂正提醒】\n更新日期：{date.today().strftime('%m/%d')}\n------------------------\n"
+                
+                # 取得有欠作業的學生座號並排序
+                todo_sids = sorted(todo_df["座號"].unique(), key=lambda x: int(x))
+                
+                # 建立 4 個欄位來排版
+                cols = st.columns(4)
+                
+                for idx, sid in enumerate(todo_sids):
+                    student_data = todo_df[todo_df["座號"] == sid]
+                    name = student_data.iloc[0]["姓名"]
+                    
+                    # 畫面顯示卡片
+                    with cols[idx % 4]:
+                        st.markdown(f"##### {sid}. {name}")
+                        tasks_for_copy = []
+                        for _, row in student_data.iterrows():
+                            hw_name = row['作業名稱']
+                            status = row['繳交狀態']
+                            color = "red" if status == "需訂正" else "orange"
+                            st.markdown(f"- 📌 {hw_name} (:{color}[{status}])")
+                            
+                            # 簡化文字版狀態
+                            short_status = "未交" if status == "未繳交" else "訂正"
+                            tasks_for_copy.append(f"{hw_name}({short_status})")
+                        st.write("---")
+                    
+                    # 加入文字版清單
+                    copy_text += f"{sid}.{name}： " + "、".join(tasks_for_copy) + "\n"
+                
+                copy_text += "------------------------\n麻煩家長協助叮嚀，謝謝！"
+                
+                st.divider()
+                st.markdown("#### 📋 群組推播文字 (可直接全選複製)")
+                st.text_area("複製區", copy_text, height=200, label_visibility="collapsed")
+
         with tab1:
             all_hws = list(st.session_state.main_df["作業名稱"].unique())
             hw_names = ["請選擇"] + all_hws
@@ -192,7 +235,7 @@ elif menu == "🛠️ 老師後台":
         with tab2:
             tsid = st.text_input("管理座號：", key="tsid_mgr")
             if tsid:
-                clean_tsid = force_int_str(tsid) # ✨ 修復：加入座號校正，確保叫得出資料
+                clean_tsid = force_int_str(tsid)
                 sm = st.session_state.main_df[st.session_state.main_df["座號"] == clean_tsid]
                 if not sm.empty:
                     name = sm.iloc[0]['姓名']
@@ -203,7 +246,6 @@ elif menu == "🛠️ 老師後台":
                         color = "red" if r['繳交狀態'] == "需訂正" else ("orange" if r['繳交狀態'] == "未繳交" else "green")
                         rb.markdown(f":{color}[**{r['繳交狀態']}**]")
                         
-                        # ✨ 優化：單生管理的按鈕也升級成不閃爍版本
                         rc.button("訂正", key=f"t2_r_{i}", on_click=update_single_status, args=(i, "需訂正"))
                         rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
                 else:
