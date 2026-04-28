@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手寫風 CSS ---
-st.set_page_config(page_title="303作業登記-手寫風格版", layout="wide")
+st.set_page_config(page_title="303作業登記-穩定手帳版", layout="wide")
 
 st.markdown("""
 <style>
@@ -149,8 +149,10 @@ if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
 if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
 
-if "new_rem_text" not in st.session_state: st.session_state.new_rem_text = ""
-if "new_hw_text" not in st.session_state: st.session_state.new_hw_text = ""
+# 初始化輸入框變數 (防止重整時報錯)
+if "new_rem_input" not in st.session_state: st.session_state.new_rem_input = ""
+if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
+if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -185,6 +187,29 @@ def update_score(idx, score_key):
 def on_hw_select():
     sel_str = st.session_state.hw_sel_widget
     st.session_state.selected_hw_base = sel_str.split(" (")[0] if sel_str != "請選擇" else "請選擇"
+
+# ✨ 新增 Callback：處理新增提醒
+def add_reminder():
+    text = st.session_state.new_rem_input.strip()
+    if not text: return
+    r_range = st.session_state.remind_range_val
+    date_val = str(r_range[0]) if len(r_range) == 1 else f"{r_range[0]} to {r_range[1]}"
+    new_r = pd.DataFrame([{"日期": date_val, "事項": text, "狀態": "待辦"}])
+    st.session_state.reminder_df = pd.concat([st.session_state.reminder_df, new_r], ignore_index=True)
+    st.session_state.has_unsaved = True
+    st.session_state.new_rem_input = "" # 安全清空
+
+# ✨ 新增 Callback：處理新增作業
+def add_homework():
+    nhw = st.session_state.new_hw_input.strip()
+    if not nhw: return
+    new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
+    st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
+    st.session_state.has_unsaved = True
+    st.session_state.new_hw_input = "" # 安全清空
+
+def update_rem_range():
+    st.session_state.remind_range_val = st.session_state.temp_range
 
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
@@ -277,16 +302,16 @@ elif menu == "🛠️ 老師後台":
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
-            r_range = st.date_input("選擇提醒期間", [date.today(), date.today() + timedelta(days=2)])
-            st.text_input("輸入待辦事項...", key="new_rem_text", placeholder="例如：明天要收回條喔！")
             
-            if st.button("➕ 新增提醒紀錄") and st.session_state.new_rem_text:
-                date_val = str(r_range[0]) if len(r_range) == 1 else f"{r_range[0]} to {r_range[1]}"
-                new_r = pd.DataFrame([{"日期": date_val, "事項": st.session_state.new_rem_text, "狀態": "待辦"}])
-                st.session_state.reminder_df = pd.concat([st.session_state.reminder_df, new_r], ignore_index=True)
-                st.session_state.has_unsaved = True
-                st.session_state.new_rem_text = ""
-                st.rerun()
+            # ✨ 使用 on_change 來安全記錄日期與文字輸入
+            st.date_input("選擇提醒期間", st.session_state.remind_range_val, key="temp_range", on_change=update_rem_range)
+            
+            c_input, c_btn = st.columns([4, 1])
+            with c_input:
+                st.text_input("輸入待辦事項... (輸入完按 Enter 或右側按鈕)", key="new_rem_input", placeholder="例如：明天要收回條喔！", on_change=add_reminder)
+            with c_btn:
+                st.markdown("<br>", unsafe_allow_html=True) # 排版對齊
+                st.button("➕ 新增", on_click=add_reminder)
 
             st.divider()
             if not st.session_state.reminder_df.empty:
@@ -370,13 +395,10 @@ elif menu == "🛠️ 老師後台":
                 st.text_area("在框框內點擊右鍵「全選」➜「複製」", copy_text, height=250)
 
         with tab3:
-            st.text_input("輸入新作業名稱：", key="new_hw_text", placeholder="例如：國語習作 CH5")
-            if st.button("🚀 發佈新作業") and st.session_state.new_hw_text:
-                new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": st.session_state.new_hw_text, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
-                st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
-                st.session_state.has_unsaved = True
-                st.session_state.new_hw_text = ""
-                st.rerun()
+            # ✨ 使用 Callback 處理新增作業，安全清空
+            st.text_input("輸入新作業名稱 (輸入完按 Enter)：", key="new_hw_input", placeholder="例如：國語習作 CH5", on_change=add_homework)
+            if st.button("🚀 確認發佈", on_click=add_homework):
+                pass # 邏輯已在 callback 中處理
 
         with tab_money:
             log_date = st.date_input("選擇上課日期", date.today())
