@@ -3,21 +3,21 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-# --- 1. 基本設定與 🎀 可愛手寫風 CSS ---
-st.set_page_config(page_title="303作業登記-純手寫版", layout="wide")
+# --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
+st.set_page_config(page_title="303作業登記-可愛圓胖數字版", layout="wide")
 
 st.markdown("""
 <style>
-/* ✨ 導入可愛手寫字體：Kalam (英文/數字) + 霞鶩文楷 (中文) */
-@import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
+/* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
+@import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 終極殺手鐧：強制網頁中【所有元素】一律套用手寫字體 */
+/* ✨ 基礎字體設定：優先使用圓潤字體 */
 * {
-    font-family: 'Kalam', 'LXGW WenKai TC', cursive !important;
+    font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
 /* 標題換上活潑的顏色 */
-h1, h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; }
+h1, h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; letter-spacing: 1px; }
 
 /* 🎀 學生卡片變成軟綿綿的圓角 */
 .student-card {
@@ -37,8 +37,8 @@ h1, h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important;
 .student-name { margin-top: 0; margin-bottom: 15px; font-size: 1.4rem; font-weight: 700; color: #DB7093; }
 
 /* 🎀 標籤變手帳風虛線 */
-.hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
-.hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
+.hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
+.hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
 
 /* 🎀 全班交齊的慶祝框 */
 .empty-state { text-align: center; padding: 60px; background-color: #E0FFFF; border-radius: 30px; border: 4px dashed #87CEEB; color: #4682B4; box-shadow: 0 10px 20px rgba(135,206,235,0.2); }
@@ -49,7 +49,7 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 
 /* 🎀 按鈕變成圓滾滾的膠囊 */
 .stButton > button { 
-    font-size: 1.15rem !important; 
+    font-size: 1.2rem !important; 
     font-weight: 700 !important; 
     padding: 0.6rem 1.5rem !important; 
     border-radius: 30px !important; 
@@ -69,6 +69,13 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .today-alert { background-color: #FFF8DC; border-left: 12px solid #FFA07A; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(255, 160, 122, 0.2); margin-bottom: 30px; }
 .today-alert h3 { margin-top: 0; color: #FF7F50; font-weight: 700;}
 .today-alert ul { margin-bottom: 0; font-size: 1.3rem; color: #CD5C5C; font-weight: 700;}
+
+/* ✨ 針對大字卡(Metric)的數字做特別放大與圓潤化 */
+[data-testid="stMetricValue"] {
+    font-family: 'Fredoka One', 'Comic Sans MS', cursive !important;
+    color: #FF69B4 !important;
+    font-size: 2.5rem !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
