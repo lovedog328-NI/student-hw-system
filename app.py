@@ -3,21 +3,21 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-# --- 1. 基本設定與 🎀 可愛風 CSS ---
-st.set_page_config(page_title="303作業登記-可愛手帳版", layout="wide")
+# --- 1. 基本設定與 🎀 可愛手寫風 CSS ---
+st.set_page_config(page_title="303作業登記-手寫風格版", layout="wide")
 
 st.markdown("""
 <style>
-/* 導入可愛圓潤字體 */
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+/* ✨ 導入可愛手寫字體：Kalam (英文/數字) + 霞鶩文楷 (中文) */
+@import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* 全局字體替換 */
-html, body, [class*="css"] {
-    font-family: 'Nunito', 'Quicksand', 'Comic Sans MS', 'Chalkboard SE', 'Microsoft JhengHei', sans-serif !important;
+/* 全局字體替換，優先使用手寫體 */
+html, body, [class*="css"], .stTextInput input, .stSelectbox div, button {
+    font-family: 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive, sans-serif !important;
 }
 
 /* 標題換上活潑的顏色 */
-h1, h2, h3 { color: #FF7F50 !important; font-weight: 900 !important; }
+h1, h2, h3 { color: #FF7F50 !important; font-weight: 700 !important; }
 
 /* 🎀 學生卡片變成軟綿綿的圓角 */
 .student-card {
@@ -34,23 +34,23 @@ h1, h2, h3 { color: #FF7F50 !important; font-weight: 900 !important; }
     transform: translateY(-5px) scale(1.02); 
     box-shadow: 0 15px 25px rgba(255, 182, 193, 0.5); 
 }
-.student-name { margin-top: 0; margin-bottom: 15px; font-size: 1.3rem; font-weight: 800; color: #DB7093; }
+.student-name { margin-top: 0; margin-bottom: 15px; font-size: 1.4rem; font-weight: 700; color: #DB7093; }
 
 /* 🎀 標籤變手帳風虛線 */
-.hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 0.95rem; font-weight: 900; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
-.hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 0.95rem; font-weight: 900; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
+.hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
+.hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
 
 /* 🎀 全班交齊的慶祝框 */
 .empty-state { text-align: center; padding: 60px; background-color: #E0FFFF; border-radius: 30px; border: 4px dashed #87CEEB; color: #4682B4; box-shadow: 0 10px 20px rgba(135,206,235,0.2); }
 
 /* 🎀 放大的分頁標籤，圓潤化 */
-button[data-baseweb="tab"] { font-size: 1.25rem !important; font-weight: 800 !important; padding: 1rem 1.5rem !important; border-radius: 20px 20px 0 0 !important; color: #FF7F50 !important;}
+button[data-baseweb="tab"] { font-size: 1.3rem !important; font-weight: 700 !important; padding: 1rem 1.5rem !important; border-radius: 20px 20px 0 0 !important; color: #FF7F50 !important;}
 button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !important; border-bottom: 4px solid #FF69B4 !important; }
 
 /* 🎀 按鈕變成圓滾滾的膠囊 */
 .stButton > button { 
-    font-size: 1.1rem !important; 
-    font-weight: 900 !important; 
+    font-size: 1.15rem !important; 
+    font-weight: 700 !important; 
     padding: 0.6rem 1.5rem !important; 
     border-radius: 30px !important; 
     border: none !important;
@@ -67,8 +67,8 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 
 /* 🎀 超醒目今日提醒框變軟萌 */
 .today-alert { background-color: #FFF8DC; border-left: 12px solid #FFA07A; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(255, 160, 122, 0.2); margin-bottom: 30px; }
-.today-alert h3 { margin-top: 0; color: #FF7F50; font-weight: 900;}
-.today-alert ul { margin-bottom: 0; font-size: 1.25rem; color: #CD5C5C; font-weight: 800;}
+.today-alert h3 { margin-top: 0; color: #FF7F50; font-weight: 700;}
+.today-alert ul { margin-bottom: 0; font-size: 1.3rem; color: #CD5C5C; font-weight: 700;}
 </style>
 """, unsafe_allow_html=True)
 
