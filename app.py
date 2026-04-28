@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 CSS ---
-st.set_page_config(page_title="303作業登記-全功能完整版", layout="wide")
+st.set_page_config(page_title="303作業登記-穩定防錯版", layout="wide")
 
 st.markdown("""
 <style>
@@ -37,7 +37,7 @@ SHEET_COLUMNS = {
     "Reminders": ["日期", "事項", "狀態"]
 }
 
-# --- 2. 核心資料邏輯 ---
+# --- 2. 核心資料與防錯邏輯 ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def force_int_str(val):
@@ -62,17 +62,42 @@ def load_data(sheet_name="Sheet1"):
         else:
             for col in expected_cols:
                 if col not in df.columns: df[col] = ""
+        
         df = df.fillna("")
         
-        if sheet_name == "Sheet1":
+        # ✨ 防錯機制：過濾掉「整列都是空白」的假資料 (解決 0 列存檔 bug 的後遺症)
+        if not df.empty:
+            df = df[~(df[expected_cols] == "").all(axis=1)]
+        
+        if sheet_name == "Sheet1" and not df.empty:
             df["座號"] = df["座號"].apply(force_int_str)
             df["成績"] = df["成績"].apply(clean_score)
             df = df[df["座號"] != ""]
             for s in STUDENT_LIST:
                 df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
-        return df
+        return df.reset_index(drop=True)
     except:
         return pd.DataFrame(columns=expected_cols)
+
+def save_data_to_sheet(df, sheet_name):
+    try:
+        expected_cols = SHEET_COLUMNS.get(sheet_name, [])
+        df_to_save = df.copy().fillna("")
+        
+        # ✨ 防錯機制：如果是空表，塞一列全空字串，防止 gspread 發生 IncorrectCellLabel 崩潰
+        if df_to_save.empty:
+            empty_row = {col: "" for col in expected_cols}
+            df_to_save = pd.DataFrame([empty_row])
+        else:
+            if sheet_name == "Sheet1":
+                df_to_save["座號"] = df_to_save["座號"].apply(force_int_str)
+                df_to_save["成績"] = df_to_save["成績"].apply(clean_score)
+        
+        conn.update(worksheet=sheet_name, data=df_to_save)
+        return True
+    except Exception as e:
+        st.error(f"存檔發生錯誤：{e}")
+        return False
 
 # --- 3. 系統暫存初始化 ---
 if 'main_df' not in st.session_state: st.session_state.main_df = load_data("Sheet1")
@@ -119,7 +144,7 @@ def on_hw_select():
 # --- 5. 側邊欄與存檔 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-# ✨ 鎖定選單跳轉
+# 鎖定選單跳轉
 menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "🔍 個人查詢", "🛠️ 老師後台"], key="main_menu")
 
 st.sidebar.divider()
@@ -130,9 +155,10 @@ if is_admin:
     if st.session_state.has_unsaved:
         st.sidebar.error("🚨 資料尚未同步至雲端")
         if st.sidebar.button("💾 儲存並同步", type="primary", use_container_width=True):
-            conn.update(worksheet="Sheet1", data=st.session_state.main_df.fillna(""))
-            conn.update(worksheet="Salary", data=st.session_state.salary_df.fillna(""))
-            conn.update(worksheet="Reminders", data=st.session_state.reminder_df.fillna(""))
+            # ✨ 修正：統一使用安全的 save_data_to_sheet 通道
+            save_data_to_sheet(st.session_state.main_df, "Sheet1")
+            save_data_to_sheet(st.session_state.salary_df, "Salary")
+            save_data_to_sheet(st.session_state.reminder_df, "Reminders")
             st.session_state.has_unsaved = False
             st.sidebar.success("✅ 已存檔")
             st.rerun()
@@ -185,7 +211,7 @@ elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("⚠️ 請在左側輸入正確密碼。")
     else:
-        # ✨ 今日提醒顯示 (支援區間與單日)
+        # ✨ 置頂提醒顯示 (支援單日與區間)
         today = date.today()
         if not st.session_state.reminder_df.empty:
             active_rems = []
@@ -205,7 +231,6 @@ elif menu == "🛠️ 老師後台":
                 st.warning(f"📅 **今日提醒：** " + " | ".join(active_rems))
                 st.divider()
 
-        # ✨ 所有功能分頁完整回歸
         tab_line, tab_money, tab_remind, tab1, tab2, tab3 = st.tabs(["📲 LINE推播", "💰 薪資", "📌 提醒", "📋 登記成績", "🎯 單生管理", "📝 新增作業"])
         
         with tab_line:
@@ -332,7 +357,6 @@ elif menu == "🛠️ 老師後台":
                 st.session_state.has_unsaved = True
                 st.rerun()
 
-# 側邊欄清理功能
 if is_admin:
     st.sidebar.divider()
     with st.sidebar.expander("🗑️ 快速清理作業"):
