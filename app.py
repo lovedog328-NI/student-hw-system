@@ -4,10 +4,12 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 CSS ---
-st.set_page_config(page_title="303作業登記-完美清空版", layout="wide")
+st.set_page_config(page_title="303作業登記-客製版", layout="wide")
 
+# ✨ 升級版 CSS：包含加大按鈕、放大分頁標籤、以及超醒目的今日提醒框
 st.markdown("""
 <style>
+/* 卡片樣式 */
 .student-card {
     border: 1px solid #e0e0e0; border-radius: 12px; padding: 16px;
     margin-bottom: 16px; background: var(--background-color);
@@ -20,6 +22,34 @@ st.markdown("""
 .hw-tag-red { background-color: rgba(211,47,47,0.1); color: #d32f2f; padding: 6px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; display: inline-block; margin: 4px 4px 4px 0; border: 1px solid rgba(211,47,47,0.2); }
 .hw-tag-orange { background-color: rgba(230,81,0,0.1); color: #e65100; padding: 6px 10px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; display: inline-block; margin: 4px 4px 4px 0; border: 1px solid rgba(230,81,0,0.2); }
 .empty-state { text-align: center; padding: 50px; background-color: rgba(76,175,80,0.1); border-radius: 15px; border: 2px dashed #4CAF50; color: #2E7D32; }
+
+/* ✨ 放大 Streamlit 分頁標籤 (Tabs) */
+button[data-baseweb="tab"] {
+    font-size: 1.25rem !important;
+    font-weight: 600 !important;
+    padding-top: 0.8rem !important;
+    padding-bottom: 0.8rem !important;
+}
+
+/* ✨ 放大 Streamlit 一般按鈕 */
+.stButton > button {
+    font-size: 1.1rem !important;
+    font-weight: bold !important;
+    padding: 0.5rem 1rem !important;
+    border-radius: 8px !important;
+}
+
+/* ✨ 超醒目今日提醒框 */
+.today-alert {
+    background-color: #fff3e0;
+    border-left: 8px solid #ff9800;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    margin-bottom: 25px;
+}
+.today-alert h3 { margin-top: 0; color: #e65100; font-weight: 900;}
+.today-alert ul { margin-bottom: 0; font-size: 1.2rem; color: #333; font-weight: 600;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -37,7 +67,7 @@ SHEET_COLUMNS = {
     "Reminders": ["日期", "事項", "狀態"]
 }
 
-# --- 2. 核心資料與防錯邏輯 ---
+# --- 2. 核心資料邏輯 ---
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def force_int_str(val):
@@ -62,12 +92,9 @@ def load_data(sheet_name="Sheet1"):
         else:
             for col in expected_cols:
                 if col not in df.columns: df[col] = ""
-        
         df = df.fillna("")
-        
         if not df.empty:
             df = df[~(df[expected_cols] == "").all(axis=1)]
-        
         if sheet_name == "Sheet1" and not df.empty:
             df["座號"] = df["座號"].apply(force_int_str)
             df["成績"] = df["成績"].apply(clean_score)
@@ -82,7 +109,6 @@ def save_data_to_sheet(df, sheet_name):
     try:
         expected_cols = SHEET_COLUMNS.get(sheet_name, [])
         df_to_save = df.copy().fillna("")
-        
         if df_to_save.empty:
             empty_row = {col: "" for col in expected_cols}
             df_to_save = pd.DataFrame([empty_row])
@@ -90,7 +116,6 @@ def save_data_to_sheet(df, sheet_name):
             if sheet_name == "Sheet1":
                 df_to_save["座號"] = df_to_save["座號"].apply(force_int_str)
                 df_to_save["成績"] = df_to_save["成績"].apply(clean_score)
-        
         conn.update(worksheet=sheet_name, data=df_to_save)
         return True
     except Exception as e:
@@ -103,13 +128,12 @@ if 'salary_df' not in st.session_state: st.session_state.salary_df = load_data("
 if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_data("Reminders")
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
-if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
 
-# ✨ 確保輸入框的 key 在一開始就存在，防止報錯
+if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
 if "new_rem_text" not in st.session_state: st.session_state.new_rem_text = ""
 if "new_hw_text" not in st.session_state: st.session_state.new_hw_text = ""
 
-# --- 4. Callbacks (不閃爍更新邏輯) ---
+# --- 4. Callbacks ---
 def clean_seat_input(val_str):
     res = []
     for s in val_str.replace("，", ",").split(","):
@@ -143,7 +167,7 @@ def on_hw_select():
     sel_str = st.session_state.hw_sel_widget
     st.session_state.selected_hw_base = sel_str.split(" (")[0] if sel_str != "請選擇" else "請選擇"
 
-# --- 5. 側邊欄與存檔 ---
+# --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
 menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "🔍 個人查詢", "🛠️ 老師後台"], key="main_menu")
@@ -211,6 +235,7 @@ elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("⚠️ 請在左側輸入正確密碼。")
     else:
+        # ✨ 超醒目：今日提醒警報框
         today = date.today()
         if not st.session_state.reminder_df.empty:
             active_rems = []
@@ -227,51 +252,22 @@ elif menu == "🛠️ 老師後台":
                 except: continue
             
             if active_rems:
-                st.warning(f"📅 **今日提醒：** " + " | ".join(active_rems))
-                st.divider()
+                # 使用 HTML 渲染醒目的警報框
+                list_html = "".join([f"<li>📌 {item}</li>" for item in active_rems])
+                st.markdown(f"""
+                <div class="today-alert">
+                    <h3>🚨 今日重要提醒</h3>
+                    <ul>{list_html}</ul>
+                </div>
+                """, unsafe_allow_html=True)
 
-        tab_line, tab_money, tab_remind, tab1, tab2, tab3 = st.tabs(["📲 LINE推播", "💰 薪資", "📌 提醒", "📋 登記成績", "🎯 單生管理", "📝 新增作業"])
+        # ✨ 分頁順序更新：提醒 -> 登記成績 -> 單生管理 -> LINE推播 -> 新增作業 -> 薪資
+        tab_remind, tab1, tab2, tab_line, tab3, tab_money = st.tabs(["📌 提醒", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資"])
         
-        with tab_line:
-            st.markdown("#### 📋 快速複製：群組推播文字")
-            todo_df = st.session_state.main_df[st.session_state.main_df["繳交狀態"] != "已繳交"]
-            if todo_df.empty: st.success("無須催繳！")
-            else:
-                copy_text = f"【作業缺交/訂正提醒】\n日期：{date.today().strftime('%m/%d')}\n------------------------\n"
-                for sid in sorted(todo_df["座號"].unique(), key=lambda x: int(x)):
-                    stu = todo_df[todo_df["座號"] == sid]
-                    tasks = [f"{r['作業名稱']}({'未交' if r['繳交狀態']=='未繳交' else '訂正'})" for _, r in stu.iterrows()]
-                    copy_text += f"{sid}.{stu.iloc[0]['姓名']}： " + "、".join(tasks) + "\n"
-                copy_text += "------------------------\n麻煩家長協助叮嚀，謝謝！"
-                st.text_area("全選複製", copy_text, height=250)
-
-        with tab_money:
-            log_date = st.date_input("選擇上課日期", date.today())
-            c1, c2, c3 = st.columns(3)
-            def add_salary(item, amount):
-                new_row = pd.DataFrame([{"日期": str(log_date), "項目": item, "金額": amount}])
-                st.session_state.salary_df = pd.concat([st.session_state.salary_df, new_row], ignore_index=True)
-                st.session_state.has_unsaved = True
-            
-            if c1.button("4點前課輔 ($405)"): add_salary("4點前課輔", 405); st.success(f"已記錄：{log_date} 4點前")
-            if c2.button("4點後課輔 ($480)"): add_salary("4點後課輔", 480); st.success(f"已記錄：{log_date} 4點後")
-            if c3.button("學扶 ($405)"): add_salary("學扶", 405); st.success(f"已記錄：{log_date} 學扶")
-            
-            if not st.session_state.salary_df.empty:
-                st.divider()
-                curr_month = datetime.now().strftime("%Y-%m")
-                m_df = st.session_state.salary_df[st.session_state.salary_df["日期"].astype(str).str.contains(curr_month)]
-                st.metric(f"📅 {curr_month} 累計薪資", f"${pd.to_numeric(m_df['金額'], errors='coerce').sum():,}")
-                st.dataframe(m_df, use_container_width=True)
-                if st.button("🗑️ 刪除最後一筆紀錄"):
-                    st.session_state.salary_df = st.session_state.salary_df.drop(st.session_state.salary_df.index[-1])
-                    st.session_state.has_unsaved = True; st.rerun()
-
         with tab_remind:
             st.subheader("📌 提醒事項 (支援區間與勾選)")
             r_range = st.date_input("選擇提醒期間", [date.today(), date.today() + timedelta(days=2)])
             
-            # ✨ 將輸入框綁定到 session_state 專屬的 key
             st.text_input("輸入待辦事項...", key="new_rem_text")
             
             if st.button("➕ 新增提醒紀錄") and st.session_state.new_rem_text:
@@ -279,7 +275,6 @@ elif menu == "🛠️ 老師後台":
                 new_r = pd.DataFrame([{"日期": date_val, "事項": st.session_state.new_rem_text, "狀態": "待辦"}])
                 st.session_state.reminder_df = pd.concat([st.session_state.reminder_df, new_r], ignore_index=True)
                 st.session_state.has_unsaved = True
-                # ✨ 強制清空輸入框
                 st.session_state.new_rem_text = ""
                 st.rerun()
 
@@ -352,16 +347,49 @@ elif menu == "🛠️ 老師後台":
                         rc.button("訂正", key=f"t2_r_{i}", on_click=update_single_status, args=(i, "需訂正"))
                         rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
 
+        with tab_line:
+            st.markdown("#### 📋 快速複製：群組推播文字")
+            todo_df = st.session_state.main_df[st.session_state.main_df["繳交狀態"] != "已繳交"]
+            if todo_df.empty: st.success("無須催繳！")
+            else:
+                copy_text = f"【作業缺交/訂正提醒】\n日期：{date.today().strftime('%m/%d')}\n------------------------\n"
+                for sid in sorted(todo_df["座號"].unique(), key=lambda x: int(x)):
+                    stu = todo_df[todo_df["座號"] == sid]
+                    tasks = [f"{r['作業名稱']}({'未交' if r['繳交狀態']=='未繳交' else '訂正'})" for _, r in stu.iterrows()]
+                    copy_text += f"{sid}.{stu.iloc[0]['姓名']}： " + "、".join(tasks) + "\n"
+                copy_text += "------------------------\n麻煩家長協助叮嚀，謝謝！"
+                st.text_area("全選複製", copy_text, height=250)
+
         with tab3:
-            # ✨ 同樣將新增作業的輸入框加上自動清空機制
             st.text_input("作業名稱：", key="new_hw_text")
             if st.button("🚀 確認發佈") and st.session_state.new_hw_text:
                 new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": st.session_state.new_hw_text, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
                 st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
                 st.session_state.has_unsaved = True
-                # ✨ 強制清空輸入框
                 st.session_state.new_hw_text = ""
                 st.rerun()
+
+        with tab_money:
+            log_date = st.date_input("選擇上課日期", date.today())
+            c1, c2, c3 = st.columns(3)
+            def add_salary(item, amount):
+                new_row = pd.DataFrame([{"日期": str(log_date), "項目": item, "金額": amount}])
+                st.session_state.salary_df = pd.concat([st.session_state.salary_df, new_row], ignore_index=True)
+                st.session_state.has_unsaved = True
+            
+            if c1.button("4點前課輔 ($405)"): add_salary("4點前課輔", 405); st.success(f"已記錄：{log_date} 4點前")
+            if c2.button("4點後課輔 ($480)"): add_salary("4點後課輔", 480); st.success(f"已記錄：{log_date} 4點後")
+            if c3.button("學扶 ($405)"): add_salary("學扶", 405); st.success(f"已記錄：{log_date} 學扶")
+            
+            if not st.session_state.salary_df.empty:
+                st.divider()
+                curr_month = datetime.now().strftime("%Y-%m")
+                m_df = st.session_state.salary_df[st.session_state.salary_df["日期"].astype(str).str.contains(curr_month)]
+                st.metric(f"📅 {curr_month} 累計薪資", f"${pd.to_numeric(m_df['金額'], errors='coerce').sum():,}")
+                st.dataframe(m_df, use_container_width=True)
+                if st.button("🗑️ 刪除最後一筆紀錄"):
+                    st.session_state.salary_df = st.session_state.salary_df.drop(st.session_state.salary_df.index[-1])
+                    st.session_state.has_unsaved = True; st.rerun()
 
 if is_admin:
     st.sidebar.divider()
