@@ -3,21 +3,24 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-# --- 1. 基本設定與 🎀 可愛手寫風 CSS ---
-st.set_page_config(page_title="303作業登記-穩定手帳版", layout="wide")
+# --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
+st.set_page_config(page_title="303作業登記-專屬客製版", layout="wide")
 
 st.markdown("""
 <style>
-/* ✨ 導入可愛手寫字體：Kalam (英文/數字) + 霞鶩文楷 (中文) */
+/* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* 全局字體替換，優先使用手寫體 */
+/* ✨ 基礎字體設定：優先使用圓潤字體 */
 * {
     font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
-/* 標題換上活潑的顏色 */
-h1, h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; letter-spacing: 1px; }
+/* ✨ 最大標題換上可愛的粉嫩藍色 */
+h1 { color: #6495ED !important; font-weight: 700 !important; letter-spacing: 1px; }
+
+/* 其他次標題維持活潑的珊瑚橘色 */
+h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; letter-spacing: 1px; }
 
 /* 🎀 學生卡片變成軟綿綿的圓角 */
 .student-card {
@@ -70,11 +73,21 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .today-alert h3 { margin-top: 0; color: #FF7F50; font-weight: 700;}
 .today-alert ul { margin-bottom: 0; font-size: 1.3rem; color: #CD5C5C; font-weight: 700;}
 
-/* ✨ 針對大字卡(Metric)的數字做特別放大與圓潤化 */
+/* ✨ 針對大字卡(Metric)的解除裁切與字體優化 */
 [data-testid="stMetricValue"] {
     font-family: 'Fredoka One', 'Comic Sans MS', cursive !important;
     color: #FF69B4 !important;
-    font-size: 2.5rem !important;
+    font-size: 2.8rem !important;
+    overflow: visible !important; /* 解除擋住裁切的封印 */
+    white-space: normal !important;
+}
+[data-testid="stMetricValue"] > div {
+    overflow: visible !important;
+    white-space: normal !important;
+}
+[data-testid="stMetricLabel"] {
+    font-size: 1.2rem !important;
+    white-space: normal !important;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -156,7 +169,6 @@ if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
 if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
 
-# 初始化輸入框變數 (防止重整時報錯)
 if "new_rem_input" not in st.session_state: st.session_state.new_rem_input = ""
 if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
 if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
@@ -307,7 +319,6 @@ elif menu == "🛠️ 老師後台":
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
-            
             st.date_input("選擇提醒期間", st.session_state.remind_range_val, key="temp_range", on_change=update_rem_range)
             
             c_input, c_btn = st.columns([4, 1])
@@ -406,10 +417,10 @@ elif menu == "🛠️ 老師後台":
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.button("🚀 確認發佈", on_click=add_homework)
 
+        # ✨ 排版升級的薪資結算區 (1+2+2 陣型)
         with tab_money:
             log_date = st.date_input("選擇上課日期", date.today())
             
-            # ✨ 新增第四個按鈕：學扶四點後 ($400)
             c1, c2, c3, c4 = st.columns(4)
             def add_salary(item, amount):
                 new_row = pd.DataFrame([{"日期": str(log_date), "項目": item, "金額": amount}])
@@ -418,7 +429,7 @@ elif menu == "🛠️ 老師後台":
             
             if c1.button("4點前課輔 ($405)"): add_salary("4點前課輔", 405); st.success(f"已記錄：{log_date} 4點前")
             if c2.button("4點後課輔 ($480)"): add_salary("4點後課輔", 480); st.success(f"已記錄：{log_date} 4點後")
-            if c3.button("學扶 ($405)"): add_salary("學扶", 405); st.success(f"已記錄：{log_date} 學扶")
+            if c3.button("學扶4點前 ($405)"): add_salary("學扶4點前", 405); st.success(f"已記錄：{log_date} 學扶4點前")
             if c4.button("學扶4點後 ($400)"): add_salary("學扶四點後", 400); st.success(f"已記錄：{log_date} 學扶4點後")
             
             if not st.session_state.salary_df.empty:
@@ -435,14 +446,18 @@ elif menu == "🛠️ 老師後台":
                 total_sum = pd.to_numeric(m_df['金額'], errors='coerce').sum()
                 cat_sum = m_df.groupby("項目")['金額'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).to_dict()
 
-                # ✨ 擴充為 5 個大字卡顯示
-                mc_tot, mc1, mc2, mc3, mc4 = st.columns(5)
-                mc_tot.metric(f"💎 {selected_month} 總計", f"${total_sum:,}")
-                mc1.metric("4點前", f"${cat_sum.get('4點前課輔', 0):,}")
-                mc2.metric("4點後", f"${cat_sum.get('4點後課輔', 0):,}")
-                mc3.metric("學扶", f"${cat_sum.get('學扶', 0):,}")
-                mc4.metric("學扶4點後", f"${cat_sum.get('學扶四點後', 0):,}")
+                # ✨ 1+2+2 陣型排版：保證金額絕對不會被擠切
+                st.metric(f"💎 {selected_month} 總計", f"${total_sum:,}")
+                
+                m1, m2 = st.columns(2)
+                m1.metric("4點前課輔", f"${cat_sum.get('4點前課輔', 0):,}")
+                m2.metric("4點後課輔", f"${cat_sum.get('4點後課輔', 0):,}")
+                
+                m3, m4 = st.columns(2)
+                m3.metric("學扶4點前", f"${cat_sum.get('學扶4點前', 0):,}")
+                m4.metric("學扶4點後", f"${cat_sum.get('學扶四點後', 0):,}")
 
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.dataframe(m_df[["日期", "項目", "金額"]].reset_index(drop=True), use_container_width=True)
                 
                 if st.button("🗑️ 刪除最新一筆紀錄"):
