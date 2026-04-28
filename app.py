@@ -3,15 +3,15 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date, datetime, timedelta
 
-# --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-可愛圓胖數字版", layout="wide")
+# --- 1. 基本設定與 🎀 可愛手寫風 CSS ---
+st.set_page_config(page_title="303作業登記-穩定手帳版", layout="wide")
 
 st.markdown("""
 <style>
-/* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
+/* ✨ 導入可愛手寫字體：Kalam (英文/數字) + 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 基礎字體設定：優先使用圓潤字體 */
+/* 全局字體替換，優先使用手寫體 */
 * {
     font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
@@ -156,6 +156,7 @@ if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
 if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
 
+# 初始化輸入框變數 (防止重整時報錯)
 if "new_rem_input" not in st.session_state: st.session_state.new_rem_input = ""
 if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
 if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
@@ -306,6 +307,7 @@ elif menu == "🛠️ 老師後台":
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
+            
             st.date_input("選擇提醒期間", st.session_state.remind_range_val, key="temp_range", on_change=update_rem_range)
             
             c_input, c_btn = st.columns([4, 1])
@@ -406,7 +408,9 @@ elif menu == "🛠️ 老師後台":
 
         with tab_money:
             log_date = st.date_input("選擇上課日期", date.today())
-            c1, c2, c3 = st.columns(3)
+            
+            # ✨ 新增第四個按鈕：學扶四點後 ($400)
+            c1, c2, c3, c4 = st.columns(4)
             def add_salary(item, amount):
                 new_row = pd.DataFrame([{"日期": str(log_date), "項目": item, "金額": amount}])
                 st.session_state.salary_df = pd.concat([st.session_state.salary_df, new_row], ignore_index=True)
@@ -415,6 +419,7 @@ elif menu == "🛠️ 老師後台":
             if c1.button("4點前課輔 ($405)"): add_salary("4點前課輔", 405); st.success(f"已記錄：{log_date} 4點前")
             if c2.button("4點後課輔 ($480)"): add_salary("4點後課輔", 480); st.success(f"已記錄：{log_date} 4點後")
             if c3.button("學扶 ($405)"): add_salary("學扶", 405); st.success(f"已記錄：{log_date} 學扶")
+            if c4.button("學扶4點後 ($400)"): add_salary("學扶四點後", 400); st.success(f"已記錄：{log_date} 學扶4點後")
             
             if not st.session_state.salary_df.empty:
                 st.divider()
@@ -430,11 +435,13 @@ elif menu == "🛠️ 老師後台":
                 total_sum = pd.to_numeric(m_df['金額'], errors='coerce').sum()
                 cat_sum = m_df.groupby("項目")['金額'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).to_dict()
 
-                mc_tot, mc1, mc2, mc3 = st.columns(4)
+                # ✨ 擴充為 5 個大字卡顯示
+                mc_tot, mc1, mc2, mc3, mc4 = st.columns(5)
                 mc_tot.metric(f"💎 {selected_month} 總計", f"${total_sum:,}")
                 mc1.metric("4點前", f"${cat_sum.get('4點前課輔', 0):,}")
                 mc2.metric("4點後", f"${cat_sum.get('4點後課輔', 0):,}")
                 mc3.metric("學扶", f"${cat_sum.get('學扶', 0):,}")
+                mc4.metric("學扶4點後", f"${cat_sum.get('學扶四點後', 0):,}")
 
                 st.dataframe(m_df[["日期", "項目", "金額"]].reset_index(drop=True), use_container_width=True)
                 
