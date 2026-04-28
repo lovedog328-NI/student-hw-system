@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 CSS ---
-st.set_page_config(page_title="303作業登記-穩定防錯版", layout="wide")
+st.set_page_config(page_title="303作業登記-完美清空版", layout="wide")
 
 st.markdown("""
 <style>
@@ -65,7 +65,6 @@ def load_data(sheet_name="Sheet1"):
         
         df = df.fillna("")
         
-        # ✨ 防錯機制：過濾掉「整列都是空白」的假資料 (解決 0 列存檔 bug 的後遺症)
         if not df.empty:
             df = df[~(df[expected_cols] == "").all(axis=1)]
         
@@ -84,7 +83,6 @@ def save_data_to_sheet(df, sheet_name):
         expected_cols = SHEET_COLUMNS.get(sheet_name, [])
         df_to_save = df.copy().fillna("")
         
-        # ✨ 防錯機制：如果是空表，塞一列全空字串，防止 gspread 發生 IncorrectCellLabel 崩潰
         if df_to_save.empty:
             empty_row = {col: "" for col in expected_cols}
             df_to_save = pd.DataFrame([empty_row])
@@ -106,6 +104,10 @@ if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_da
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
 if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
+
+# ✨ 確保輸入框的 key 在一開始就存在，防止報錯
+if "new_rem_text" not in st.session_state: st.session_state.new_rem_text = ""
+if "new_hw_text" not in st.session_state: st.session_state.new_hw_text = ""
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -144,7 +146,6 @@ def on_hw_select():
 # --- 5. 側邊欄與存檔 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-# 鎖定選單跳轉
 menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "🔍 個人查詢", "🛠️ 老師後台"], key="main_menu")
 
 st.sidebar.divider()
@@ -155,7 +156,6 @@ if is_admin:
     if st.session_state.has_unsaved:
         st.sidebar.error("🚨 資料尚未同步至雲端")
         if st.sidebar.button("💾 儲存並同步", type="primary", use_container_width=True):
-            # ✨ 修正：統一使用安全的 save_data_to_sheet 通道
             save_data_to_sheet(st.session_state.main_df, "Sheet1")
             save_data_to_sheet(st.session_state.salary_df, "Salary")
             save_data_to_sheet(st.session_state.reminder_df, "Reminders")
@@ -211,7 +211,6 @@ elif menu == "🛠️ 老師後台":
     if not is_admin:
         st.warning("⚠️ 請在左側輸入正確密碼。")
     else:
-        # ✨ 置頂提醒顯示 (支援單日與區間)
         today = date.today()
         if not st.session_state.reminder_df.empty:
             active_rems = []
@@ -271,13 +270,17 @@ elif menu == "🛠️ 老師後台":
         with tab_remind:
             st.subheader("📌 提醒事項 (支援區間與勾選)")
             r_range = st.date_input("選擇提醒期間", [date.today(), date.today() + timedelta(days=2)])
-            r_text = st.text_input("輸入待辦事項...", key="new_rem_text")
             
-            if st.button("➕ 新增提醒紀錄") and r_text:
+            # ✨ 將輸入框綁定到 session_state 專屬的 key
+            st.text_input("輸入待辦事項...", key="new_rem_text")
+            
+            if st.button("➕ 新增提醒紀錄") and st.session_state.new_rem_text:
                 date_val = str(r_range[0]) if len(r_range) == 1 else f"{r_range[0]} to {r_range[1]}"
-                new_r = pd.DataFrame([{"日期": date_val, "事項": r_text, "狀態": "待辦"}])
+                new_r = pd.DataFrame([{"日期": date_val, "事項": st.session_state.new_rem_text, "狀態": "待辦"}])
                 st.session_state.reminder_df = pd.concat([st.session_state.reminder_df, new_r], ignore_index=True)
                 st.session_state.has_unsaved = True
+                # ✨ 強制清空輸入框
+                st.session_state.new_rem_text = ""
                 st.rerun()
 
             st.divider()
@@ -350,11 +353,14 @@ elif menu == "🛠️ 老師後台":
                         rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
 
         with tab3:
-            nhw = st.text_input("作業名稱：")
-            if st.button("🚀 確認發佈") and nhw:
-                new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
+            # ✨ 同樣將新增作業的輸入框加上自動清空機制
+            st.text_input("作業名稱：", key="new_hw_text")
+            if st.button("🚀 確認發佈") and st.session_state.new_hw_text:
+                new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": st.session_state.new_hw_text, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
                 st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
                 st.session_state.has_unsaved = True
+                # ✨ 強制清空輸入框
+                st.session_state.new_hw_text = ""
                 st.rerun()
 
 if is_admin:
