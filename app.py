@@ -4,20 +4,20 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手寫風 CSS ---
-st.set_page_config(page_title="303作業登記-穩定手帳版", layout="wide")
+st.set_page_config(page_title="303作業登記-純手寫版", layout="wide")
 
 st.markdown("""
 <style>
 /* ✨ 導入可愛手寫字體：Kalam (英文/數字) + 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* 全局字體替換，優先使用手寫體 */
-html, body, [class*="css"], .stTextInput input, .stSelectbox div, button {
-    font-family: 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive, sans-serif !important;
+/* ✨ 終極殺手鐧：強制網頁中【所有元素】一律套用手寫字體 */
+* {
+    font-family: 'Kalam', 'LXGW WenKai TC', cursive !important;
 }
 
 /* 標題換上活潑的顏色 */
-h1, h2, h3 { color: #FF7F50 !important; font-weight: 700 !important; }
+h1, h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; }
 
 /* 🎀 學生卡片變成軟綿綿的圓角 */
 .student-card {
@@ -149,7 +149,6 @@ if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
 if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
 
-# 初始化輸入框變數 (防止重整時報錯)
 if "new_rem_input" not in st.session_state: st.session_state.new_rem_input = ""
 if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
 if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
@@ -188,7 +187,6 @@ def on_hw_select():
     sel_str = st.session_state.hw_sel_widget
     st.session_state.selected_hw_base = sel_str.split(" (")[0] if sel_str != "請選擇" else "請選擇"
 
-# ✨ 新增 Callback：處理新增提醒
 def add_reminder():
     text = st.session_state.new_rem_input.strip()
     if not text: return
@@ -197,16 +195,15 @@ def add_reminder():
     new_r = pd.DataFrame([{"日期": date_val, "事項": text, "狀態": "待辦"}])
     st.session_state.reminder_df = pd.concat([st.session_state.reminder_df, new_r], ignore_index=True)
     st.session_state.has_unsaved = True
-    st.session_state.new_rem_input = "" # 安全清空
+    st.session_state.new_rem_input = "" 
 
-# ✨ 新增 Callback：處理新增作業
 def add_homework():
     nhw = st.session_state.new_hw_input.strip()
     if not nhw: return
     new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
     st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
     st.session_state.has_unsaved = True
-    st.session_state.new_hw_input = "" # 安全清空
+    st.session_state.new_hw_input = "" 
 
 def update_rem_range():
     st.session_state.remind_range_val = st.session_state.temp_range
@@ -302,15 +299,13 @@ elif menu == "🛠️ 老師後台":
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
-            
-            # ✨ 使用 on_change 來安全記錄日期與文字輸入
             st.date_input("選擇提醒期間", st.session_state.remind_range_val, key="temp_range", on_change=update_rem_range)
             
             c_input, c_btn = st.columns([4, 1])
             with c_input:
                 st.text_input("輸入待辦事項... (輸入完按 Enter 或右側按鈕)", key="new_rem_input", placeholder="例如：明天要收回條喔！", on_change=add_reminder)
             with c_btn:
-                st.markdown("<br>", unsafe_allow_html=True) # 排版對齊
+                st.markdown("<br>", unsafe_allow_html=True)
                 st.button("➕ 新增", on_click=add_reminder)
 
             st.divider()
@@ -395,10 +390,12 @@ elif menu == "🛠️ 老師後台":
                 st.text_area("在框框內點擊右鍵「全選」➜「複製」", copy_text, height=250)
 
         with tab3:
-            # ✨ 使用 Callback 處理新增作業，安全清空
-            st.text_input("輸入新作業名稱 (輸入完按 Enter)：", key="new_hw_input", placeholder="例如：國語習作 CH5", on_change=add_homework)
-            if st.button("🚀 確認發佈", on_click=add_homework):
-                pass # 邏輯已在 callback 中處理
+            c_input, c_btn = st.columns([4, 1])
+            with c_input:
+                st.text_input("輸入新作業名稱 (輸入完按 Enter)：", key="new_hw_input", placeholder="例如：國語習作 CH5", on_change=add_homework)
+            with c_btn:
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.button("🚀 確認發佈", on_click=add_homework)
 
         with tab_money:
             log_date = st.date_input("選擇上課日期", date.today())
