@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-專屬客製版", layout="wide")
+st.set_page_config(page_title="303作業登記-單生淨空版", layout="wide")
 
 st.markdown("""
 <style>
@@ -78,17 +78,11 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
     font-family: 'Fredoka One', 'Comic Sans MS', cursive !important;
     color: #FF69B4 !important;
     font-size: 2.8rem !important;
-    overflow: visible !important; /* 解除擋住裁切的封印 */
-    white-space: normal !important;
-}
-[data-testid="stMetricValue"] > div {
     overflow: visible !important;
     white-space: normal !important;
 }
-[data-testid="stMetricLabel"] {
-    font-size: 1.2rem !important;
-    white-space: normal !important;
-}
+[data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
+[data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -389,12 +383,21 @@ elif menu == "🛠️ 老師後台":
                 sm = st.session_state.main_df[st.session_state.main_df["座號"] == clean_tsid]
                 if not sm.empty:
                     st.markdown(f"#### 👤 學生：{sm.iloc[0]['姓名']}")
-                    for i, r in sm.iterrows():
-                        ra, rb, rc, rd = st.columns([3, 2, 1, 1])
-                        ra.write(f"📌 {r['作業名稱']}")
-                        rb.markdown(f":{'red' if r['繳交狀態']=='需訂正' else ('orange' if r['繳交狀態']=='未繳交' else 'green')}[**{r['繳交狀態']}**]")
-                        rc.button("訂正", key=f"t2_r_{i}", on_click=update_single_status, args=(i, "需訂正"))
-                        rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
+                    
+                    # ✨ 新增防呆：隱藏已繳交的作業
+                    hide_done = st.checkbox("👀 隱藏已繳交的作業", value=True, key="hide_done_cb")
+                    if hide_done:
+                        sm = sm[sm["繳交狀態"] != "已繳交"]
+                        
+                    if sm.empty:
+                        st.success("🎉 太棒了！這位學生目前沒有欠交任何作業！")
+                    else:
+                        for i, r in sm.iterrows():
+                            ra, rb, rc, rd = st.columns([3, 2, 1, 1])
+                            ra.write(f"📌 {r['作業名稱']}")
+                            rb.markdown(f":{'red' if r['繳交狀態']=='需訂正' else ('orange' if r['繳交狀態']=='未繳交' else 'green')}[**{r['繳交狀態']}**]")
+                            rc.button("訂正", key=f"t2_r_{i}", on_click=update_single_status, args=(i, "需訂正"))
+                            rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
 
         with tab_line:
             st.markdown("#### 📋 快速複製：群組推播文字")
@@ -417,7 +420,6 @@ elif menu == "🛠️ 老師後台":
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.button("🚀 確認發佈", on_click=add_homework)
 
-        # ✨ 排版升級的薪資結算區 (1+2+2 陣型)
         with tab_money:
             log_date = st.date_input("選擇上課日期", date.today())
             
@@ -446,7 +448,6 @@ elif menu == "🛠️ 老師後台":
                 total_sum = pd.to_numeric(m_df['金額'], errors='coerce').sum()
                 cat_sum = m_df.groupby("項目")['金額'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).to_dict()
 
-                # ✨ 1+2+2 陣型排版：保證金額絕對不會被擠切
                 st.metric(f"💎 {selected_month} 總計", f"${total_sum:,}")
                 
                 m1, m2 = st.columns(2)
