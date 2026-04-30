@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-圖示修復版", layout="wide")
+st.set_page_config(page_title="303作業登記-薪資節數版", layout="wide")
 
 st.markdown("""
 <style>
@@ -67,15 +67,15 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
 .contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
-/* ✨ 針對大字卡(Metric)的解除裁切與字體優化 */
+/* ✨ 針對大字卡(Metric)的解除裁切與字體優化，因為加入了「節數」，字體稍微調小以適應寬度 */
 [data-testid="stMetricValue"] {
     font-family: 'Fredoka One', 'Comic Sans MS', cursive !important;
     color: #FF69B4 !important;
-    font-size: 2.8rem !important;
+    font-size: 2.2rem !important; 
     overflow: visible !important;
-    white-space: normal !important;
+    white-space: nowrap !important; /* 保持單行顯示 */
 }
-[data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
+[data-testid="stMetricValue"] > div { overflow: visible !important; white-space: nowrap !important; }
 [data-testid="stMetricLabel"] { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; font-size: 1.2rem !important; white-space: normal !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -487,17 +487,28 @@ elif menu == "🛠️ 老師後台":
                 m_df = temp_df[temp_df["年月"] == selected_month]
 
                 total_sum = pd.to_numeric(m_df['金額'], errors='coerce').sum()
-                cat_sum = m_df.groupby("項目")['金額'].apply(lambda x: pd.to_numeric(x, errors='coerce').sum()).to_dict()
+                
+                # ✨ 新增：計算各項目的「出現次數 (節數)」與「總金額」
+                cat_data = m_df.groupby("項目").agg(
+                    節數=('項目', 'count'),
+                    金額=('金額', lambda x: pd.to_numeric(x, errors='coerce').sum())
+                ).to_dict('index')
 
-                st.metric(f"💎 {selected_month} 總計", f"${total_sum:,}")
+                # 安全提取資料的輔助函式 (格式：XX節 / $YYYY)
+                def get_metric_str(item_name):
+                    data = cat_data.get(item_name, {'節數': 0, '金額': 0})
+                    return f"{data['節數']}節 / ${data['金額']:,}"
+
+                # ✨ 1+2+2 排版，同時顯示總計金額與各分類的節數與金額
+                st.metric(f"💎 {selected_month} 總計金額", f"${total_sum:,}")
                 
                 m1, m2 = st.columns(2)
-                m1.metric("4點前課輔", f"${cat_sum.get('4點前課輔', 0):,}")
-                m2.metric("4點後課輔", f"${cat_sum.get('4點後課輔', 0):,}")
+                m1.metric("4點前課輔", get_metric_str('4點前課輔'))
+                m2.metric("4點後課輔", get_metric_str('4點後課輔'))
                 
                 m3, m4 = st.columns(2)
-                m3.metric("學扶4點前", f"${cat_sum.get('學扶4點前', 0):,}")
-                m4.metric("學扶4點後", f"${cat_sum.get('學扶四點後', 0):,}")
+                m3.metric("學扶4點前", get_metric_str('學扶4點前'))
+                m4.metric("學扶4點後", get_metric_str('學扶四點後'))
 
                 st.markdown("<br>", unsafe_allow_html=True)
                 st.dataframe(m_df[["日期", "項目", "金額"]].reset_index(drop=True), use_container_width=True)
