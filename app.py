@@ -4,16 +4,21 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-單生淨空版", layout="wide")
+st.set_page_config(page_title="303作業登記-專屬客製版", layout="wide")
 
 st.markdown("""
 <style>
 /* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 基礎字體設定：優先使用圓潤字體 */
-* {
+/* ✨ 基礎字體設定：排除系統圖示，避免出現 arrow_down 亂碼 */
+*:not(.material-symbols-rounded):not(.material-icons) {
     font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
+}
+
+/* ✨ 加強保護：把圖示專用字體還給 Streamlit 內建元素 */
+.material-symbols-rounded, .material-icons {
+    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
 }
 
 /* ✨ 最大標題換上可愛的粉嫩藍色 */
@@ -384,7 +389,6 @@ elif menu == "🛠️ 老師後台":
                 if not sm.empty:
                     st.markdown(f"#### 👤 學生：{sm.iloc[0]['姓名']}")
                     
-                    # ✨ 新增防呆：隱藏已繳交的作業
                     hide_done = st.checkbox("👀 隱藏已繳交的作業", value=True, key="hide_done_cb")
                     if hide_done:
                         sm = sm[sm["繳交狀態"] != "已繳交"]
