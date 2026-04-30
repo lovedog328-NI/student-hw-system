@@ -11,14 +11,14 @@ st.markdown("""
 /* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 基礎字體設定：優先使用圓潤字體，並保護系統圖示 */
-*:not(.material-symbols-rounded):not(.material-icons) {
+/* ✨ 基礎字體設定：精準指定文字區塊，避免破壞系統圖示 */
+html, body, p, div, span, h1, h2, h3, h4, h5, h6, li, a, button, input, select, textarea, table, td, th {
     font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
-/* ✨ 保護 Streamlit 內建圖示 */
-.material-symbols-rounded, .material-icons {
-    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+/* ✨ 圖示保護機制：強制把圖示字體還給 Streamlit 內建元件 (解決 arrow_right 亂碼) */
+i, svg, [class*="icon"], [class*="Icon"], .material-symbols-rounded, .material-icons {
+    font-family: 'Material Icons', 'Material Symbols Rounded', sans-serif !important;
 }
 
 /* ✨ 最大標題換上可愛的粉嫩藍色 */
@@ -85,7 +85,6 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 
 /* ✨ 針對大字卡(Metric)的解除裁切與字體優化 */
 [data-testid="stMetricValue"] {
-    font-family: 'Fredoka One', 'Comic Sans MS', cursive !important;
     color: #FF69B4 !important;
     font-size: 2.8rem !important;
     overflow: visible !important;
@@ -104,7 +103,6 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"
 ], 1)]
 
-# ✨ 新增 ContactBook 分頁欄位定義
 SHEET_COLUMNS = {
     "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"],
     "Salary": ["日期", "項目", "金額"],
@@ -171,9 +169,7 @@ def save_data_to_sheet(df, sheet_name):
 if 'main_df' not in st.session_state: st.session_state.main_df = load_data("Sheet1")
 if 'salary_df' not in st.session_state: st.session_state.salary_df = load_data("Salary")
 if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_data("Reminders")
-# ✨ 初始化聯絡簿暫存
 if 'contact_df' not in st.session_state: st.session_state.contact_df = load_data("ContactBook")
-
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
 if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
@@ -240,7 +236,6 @@ def update_rem_range():
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-# ✨ 選單加入「每日聯絡簿」
 menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "📖 每日聯絡簿", "🔍 個人查詢", "🛠️ 老師後台"], key="main_menu")
 
 st.sidebar.divider()
@@ -254,7 +249,6 @@ if is_admin:
             save_data_to_sheet(st.session_state.main_df, "Sheet1")
             save_data_to_sheet(st.session_state.salary_df, "Salary")
             save_data_to_sheet(st.session_state.reminder_df, "Reminders")
-            # ✨ 儲存聯絡簿資料
             save_data_to_sheet(st.session_state.contact_df, "ContactBook")
             st.session_state.has_unsaved = False
             st.sidebar.success("✅ 已存檔")
@@ -291,7 +285,6 @@ if menu == "📊 班級公佈欄":
                     tags_html += f'<span class="{css_class}">{row["作業名稱"]} ({row["繳交狀態"]})</span>'
                 st.markdown(f'<div class="student-card"><div class="student-name">👤 {sid}. {name}</div><div>{tags_html}</div></div>', unsafe_allow_html=True)
 
-# ✨ 新增：每日聯絡簿畫面 (家長與學生查看端)
 elif menu == "📖 每日聯絡簿":
     st.markdown("### 📖 每日聯絡簿")
     st.write("家長與小朋友們，請在這裡查看每日的交代事項喔！")
@@ -349,7 +342,6 @@ elif menu == "🛠️ 老師後台":
                 list_html = "".join([f"<li>📌 {item}</li>" for item in active_rems])
                 st.markdown(f'<div class="today-alert"><h3>🚨 今日重要提醒</h3><ul>{list_html}</ul></div>', unsafe_allow_html=True)
 
-        # ✨ 新增「聯絡簿」編輯分頁
         tab_remind, tab_contact, tab1, tab2, tab_line, tab3, tab_money = st.tabs(["📌 提醒", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資紀錄"])
         
         with tab_remind:
@@ -384,7 +376,6 @@ elif menu == "🛠️ 老師後台":
                     st.session_state.reminder_df = pd.DataFrame(columns=["日期", "事項", "狀態"])
                     st.session_state.has_unsaved = True; st.rerun()
 
-        # ✨ 新增：聯絡簿編輯區
         with tab_contact:
             st.subheader("📖 編輯每日聯絡簿")
             cb_date = st.date_input("選擇聯絡簿日期", date.today(), key="edit_cb_date")
