@@ -11,12 +11,12 @@ st.markdown("""
 /* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 基礎字體設定：排除系統圖示，避免出現 arrow_down 亂碼 */
+/* ✨ 基礎字體設定：優先使用圓潤字體，並保護系統圖示 */
 *:not(.material-symbols-rounded):not(.material-icons) {
     font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
-/* ✨ 加強保護：把圖示專用字體還給 Streamlit 內建元素 */
+/* ✨ 保護 Streamlit 內建圖示 */
 .material-symbols-rounded, .material-icons {
     font-family: 'Material Symbols Rounded', 'Material Icons' !important;
 }
@@ -73,10 +73,15 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
     box-shadow: 0 8px 15px rgba(255, 105, 180, 0.5) !important;
 }
 
-/* 🎀 超醒目今日提醒框變軟萌 */
+/* 🎀 超醒目今日提醒框與聯絡簿框變軟萌 */
 .today-alert { background-color: #FFF8DC; border-left: 12px solid #FFA07A; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(255, 160, 122, 0.2); margin-bottom: 30px; }
 .today-alert h3 { margin-top: 0; color: #FF7F50; font-weight: 700;}
 .today-alert ul { margin-bottom: 0; font-size: 1.3rem; color: #CD5C5C; font-weight: 700;}
+
+/* ✨ 聯絡簿專屬藍色風格框 */
+.contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
+.contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
+.contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
 /* ✨ 針對大字卡(Metric)的解除裁切與字體優化 */
 [data-testid="stMetricValue"] {
@@ -99,10 +104,12 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"
 ], 1)]
 
+# ✨ 新增 ContactBook 分頁欄位定義
 SHEET_COLUMNS = {
     "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"],
     "Salary": ["日期", "項目", "金額"],
-    "Reminders": ["日期", "事項", "狀態"]
+    "Reminders": ["日期", "事項", "狀態"],
+    "ContactBook": ["日期", "內容"]
 }
 
 # --- 2. 核心資料與防錯邏輯 ---
@@ -164,6 +171,9 @@ def save_data_to_sheet(df, sheet_name):
 if 'main_df' not in st.session_state: st.session_state.main_df = load_data("Sheet1")
 if 'salary_df' not in st.session_state: st.session_state.salary_df = load_data("Salary")
 if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_data("Reminders")
+# ✨ 初始化聯絡簿暫存
+if 'contact_df' not in st.session_state: st.session_state.contact_df = load_data("ContactBook")
+
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
 if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
@@ -230,7 +240,8 @@ def update_rem_range():
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "🔍 個人查詢", "🛠️ 老師後台"], key="main_menu")
+# ✨ 選單加入「每日聯絡簿」
+menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "📖 每日聯絡簿", "🔍 個人查詢", "🛠️ 老師後台"], key="main_menu")
 
 st.sidebar.divider()
 pwd = st.sidebar.text_input("老師密碼 (管理員專用)", type="password")
@@ -243,6 +254,8 @@ if is_admin:
             save_data_to_sheet(st.session_state.main_df, "Sheet1")
             save_data_to_sheet(st.session_state.salary_df, "Salary")
             save_data_to_sheet(st.session_state.reminder_df, "Reminders")
+            # ✨ 儲存聯絡簿資料
+            save_data_to_sheet(st.session_state.contact_df, "ContactBook")
             st.session_state.has_unsaved = False
             st.sidebar.success("✅ 已存檔")
             st.rerun()
@@ -253,6 +266,7 @@ if st.sidebar.button("🔄 重新載入最新資料"):
     st.session_state.main_df = load_data("Sheet1")
     st.session_state.salary_df = load_data("Salary")
     st.session_state.reminder_df = load_data("Reminders")
+    st.session_state.contact_df = load_data("ContactBook")
     st.session_state.has_unsaved = False
     st.rerun()
 
@@ -276,6 +290,27 @@ if menu == "📊 班級公佈欄":
                     css_class = "hw-tag-red" if row['繳交狀態'] == "需訂正" else "hw-tag-orange"
                     tags_html += f'<span class="{css_class}">{row["作業名稱"]} ({row["繳交狀態"]})</span>'
                 st.markdown(f'<div class="student-card"><div class="student-name">👤 {sid}. {name}</div><div>{tags_html}</div></div>', unsafe_allow_html=True)
+
+# ✨ 新增：每日聯絡簿畫面 (家長與學生查看端)
+elif menu == "📖 每日聯絡簿":
+    st.markdown("### 📖 每日聯絡簿")
+    st.write("家長與小朋友們，請在這裡查看每日的交代事項喔！")
+    
+    view_date = st.date_input("📅 選擇要查看的日期", date.today(), key="view_cb_date")
+    view_date_str = str(view_date)
+
+    content = "老師今天還沒有發佈聯絡簿內容喔！🌿"
+    if not st.session_state.contact_df.empty:
+        match = st.session_state.contact_df[st.session_state.contact_df["日期"] == view_date_str]
+        if not match.empty and match.iloc[0]["內容"].strip():
+            content = match.iloc[0]["內容"]
+
+    st.markdown(f'''
+    <div class="contact-book-box">
+        <h3>📅 {view_date_str} 聯絡事項</h3>
+        <p>{content}</p>
+    </div>
+    ''', unsafe_allow_html=True)
 
 elif menu == "🔍 個人查詢":
     sid = st.text_input("輸入座號查詢您的作業 (1-22)：", placeholder="例如：5")
@@ -314,7 +349,8 @@ elif menu == "🛠️ 老師後台":
                 list_html = "".join([f"<li>📌 {item}</li>" for item in active_rems])
                 st.markdown(f'<div class="today-alert"><h3>🚨 今日重要提醒</h3><ul>{list_html}</ul></div>', unsafe_allow_html=True)
 
-        tab_remind, tab1, tab2, tab_line, tab3, tab_money = st.tabs(["📌 提醒", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資紀錄"])
+        # ✨ 新增「聯絡簿」編輯分頁
+        tab_remind, tab_contact, tab1, tab2, tab_line, tab3, tab_money = st.tabs(["📌 提醒", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資紀錄"])
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
@@ -347,6 +383,31 @@ elif menu == "🛠️ 老師後台":
                 if st.button("🧹 清空所有提醒"):
                     st.session_state.reminder_df = pd.DataFrame(columns=["日期", "事項", "狀態"])
                     st.session_state.has_unsaved = True; st.rerun()
+
+        # ✨ 新增：聯絡簿編輯區
+        with tab_contact:
+            st.subheader("📖 編輯每日聯絡簿")
+            cb_date = st.date_input("選擇聯絡簿日期", date.today(), key="edit_cb_date")
+            cb_date_str = str(cb_date)
+
+            existing_content = ""
+            if not st.session_state.contact_df.empty:
+                match = st.session_state.contact_df[st.session_state.contact_df["日期"] == cb_date_str]
+                if not match.empty:
+                    existing_content = match.iloc[0]["內容"]
+
+            new_content = st.text_area("輸入聯絡簿內容 (支援多行文字)", value=existing_content, height=200, placeholder="1. 國語習作 CH5\n2. 明天記得帶彩色筆\n3. 發下學費單請家長簽收")
+
+            if st.button("📝 儲存本日聯絡簿"):
+                if not st.session_state.contact_df.empty and cb_date_str in st.session_state.contact_df["日期"].values:
+                    idx = st.session_state.contact_df.index[st.session_state.contact_df["日期"] == cb_date_str].tolist()[0]
+                    st.session_state.contact_df.at[idx, "內容"] = new_content
+                else:
+                    new_row = pd.DataFrame([{"日期": cb_date_str, "內容": new_content}])
+                    st.session_state.contact_df = pd.concat([st.session_state.contact_df, new_row], ignore_index=True)
+
+                st.session_state.has_unsaved = True
+                st.success("聯絡簿已更新！記得點擊左側「💾 儲存並同步」寫入雲端喔！")
 
         with tab1:
             all_hws = list(st.session_state.main_df["作業名稱"].unique())
