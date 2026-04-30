@@ -4,21 +4,21 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-專屬客製版", layout="wide")
+st.set_page_config(page_title="303作業登記-圖示修復版", layout="wide")
 
 st.markdown("""
 <style>
 /* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 基礎字體設定：精準指定文字區塊，避免破壞系統圖示 */
-html, body, p, div, span, h1, h2, h3, h4, h5, h6, li, a, button, input, select, textarea, table, td, th {
-    font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
+/* ✨ 安全字體設定：只針對真正的「文字元件」，絕對不碰會破壞系統圖示的底層 span */
+h1, h2, h3, h4, h5, h6, p, li, label, input, textarea, button, th, td, .stMarkdown {
+    font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
-/* ✨ 圖示保護機制：強制把圖示字體還給 Streamlit 內建元件 (解決 arrow_right 亂碼) */
-i, svg, [class*="icon"], [class*="Icon"], .material-symbols-rounded, .material-icons {
-    font-family: 'Material Icons', 'Material Symbols Rounded', sans-serif !important;
+/* ✨ 針對特定圖示標籤強制還原，確保 arrow_down 與 arrow_right 正常顯示 */
+.material-symbols-rounded, .material-icons, [data-baseweb="icon"] {
+    font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
 }
 
 /* ✨ 最大標題換上可愛的粉嫩藍色 */
@@ -29,6 +29,7 @@ h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; let
 
 /* 🎀 學生卡片變成軟綿綿的圓角 */
 .student-card {
+    font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
     border: 3px solid #FFE4E1;
     border-radius: 25px; 
     padding: 20px;
@@ -38,60 +39,44 @@ h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; let
     transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
     border-top: 8px solid #FFB6C1;
 }
-.student-card:hover { 
-    transform: translateY(-5px) scale(1.02); 
-    box-shadow: 0 15px 25px rgba(255, 182, 193, 0.5); 
-}
+.student-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 15px 25px rgba(255, 182, 193, 0.5); }
 .student-name { margin-top: 0; margin-bottom: 15px; font-size: 1.4rem; font-weight: 700; color: #DB7093; }
 
 /* 🎀 標籤變手帳風虛線 */
-.hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
-.hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
+.hw-tag-red { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
+.hw-tag-orange { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
 
 /* 🎀 全班交齊的慶祝框 */
-.empty-state { text-align: center; padding: 60px; background-color: #E0FFFF; border-radius: 30px; border: 4px dashed #87CEEB; color: #4682B4; box-shadow: 0 10px 20px rgba(135,206,235,0.2); }
+.empty-state { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; text-align: center; padding: 60px; background-color: #E0FFFF; border-radius: 30px; border: 4px dashed #87CEEB; color: #4682B4; box-shadow: 0 10px 20px rgba(135,206,235,0.2); }
 
 /* 🎀 放大的分頁標籤，圓潤化 */
-button[data-baseweb="tab"] { font-size: 1.3rem !important; font-weight: 700 !important; padding: 1rem 1.5rem !important; border-radius: 20px 20px 0 0 !important; color: #FF7F50 !important;}
+button[data-baseweb="tab"] { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; font-size: 1.3rem !important; font-weight: 700 !important; padding: 1rem 1.5rem !important; border-radius: 20px 20px 0 0 !important; color: #FF7F50 !important;}
 button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !important; border-bottom: 4px solid #FF69B4 !important; }
 
 /* 🎀 按鈕變成圓滾滾的膠囊 */
-.stButton > button { 
-    font-size: 1.2rem !important; 
-    font-weight: 700 !important; 
-    padding: 0.6rem 1.5rem !important; 
-    border-radius: 30px !important; 
-    border: none !important;
-    background-color: #FFB6C1 !important;
-    color: white !important;
-    box-shadow: 0 6px 10px rgba(255, 182, 193, 0.4) !important;
-    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
-}
-.stButton > button:hover {
-    background-color: #FF69B4 !important;
-    transform: scale(1.08) !important;
-    box-shadow: 0 8px 15px rgba(255, 105, 180, 0.5) !important;
-}
+.stButton > button { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; font-size: 1.2rem !important; font-weight: 700 !important; padding: 0.6rem 1.5rem !important; border-radius: 30px !important; border: none !important; background-color: #FFB6C1 !important; color: white !important; box-shadow: 0 6px 10px rgba(255, 182, 193, 0.4) !important; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;}
+.stButton > button:hover { background-color: #FF69B4 !important; transform: scale(1.08) !important; box-shadow: 0 8px 15px rgba(255, 105, 180, 0.5) !important; }
 
-/* 🎀 超醒目今日提醒框與聯絡簿框變軟萌 */
-.today-alert { background-color: #FFF8DC; border-left: 12px solid #FFA07A; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(255, 160, 122, 0.2); margin-bottom: 30px; }
+/* 🎀 超醒目今日提醒框變軟萌 */
+.today-alert { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #FFF8DC; border-left: 12px solid #FFA07A; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(255, 160, 122, 0.2); margin-bottom: 30px; }
 .today-alert h3 { margin-top: 0; color: #FF7F50; font-weight: 700;}
 .today-alert ul { margin-bottom: 0; font-size: 1.3rem; color: #CD5C5C; font-weight: 700;}
 
 /* ✨ 聯絡簿專屬藍色風格框 */
-.contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
+.contact-book-box { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
 .contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
 /* ✨ 針對大字卡(Metric)的解除裁切與字體優化 */
 [data-testid="stMetricValue"] {
+    font-family: 'Fredoka One', 'Comic Sans MS', cursive !important;
     color: #FF69B4 !important;
     font-size: 2.8rem !important;
     overflow: visible !important;
     white-space: normal !important;
 }
 [data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
-[data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
+[data-testid="stMetricLabel"] { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; font-size: 1.2rem !important; white-space: normal !important; }
 </style>
 """, unsafe_allow_html=True)
 
