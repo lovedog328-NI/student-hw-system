@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-班級規定版", layout="wide")
+st.set_page_config(page_title="303作業登記-班級規定修復版", layout="wide")
 
 st.markdown("""
 <style>
@@ -16,7 +16,7 @@ html, body, p, div, span, h1, h2, h3, h4, h5, h6, li, label, input, textarea, bu
     font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
-/* 🛡️ 終極圖示保護機制：將所有負責顯示圖示的元件（包含摺疊選單箭頭）徹底隔離，強制使用系統圖示字體 */
+/* 🛡️ 終極圖示保護機制：將所有負責顯示圖示的元件徹底隔離，強制使用系統圖示字體 */
 .material-symbols-rounded, 
 .material-icons, 
 [data-baseweb="icon"], 
@@ -203,7 +203,10 @@ if "new_rem_input" not in st.session_state: st.session_state.new_rem_input = ""
 if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
 if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
 if "selected_point_sid" not in st.session_state: st.session_state.selected_point_sid = None
+
+# ✨ 初始化班級規定的暫存變數
 if "new_rule_name" not in st.session_state: st.session_state.new_rule_name = ""
+if "new_rule_pt" not in st.session_state: st.session_state.new_rule_pt = 1
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -288,6 +291,16 @@ def add_homework():
     st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
     st.session_state.has_unsaved = True
     st.session_state.new_hw_input = "" 
+
+# ✨ Callback：新增班級規定
+def add_custom_rule():
+    r_name = st.session_state.new_rule_name.strip()
+    r_pt = st.session_state.new_rule_pt
+    if r_name:
+        new_r = pd.DataFrame([{"規定名稱": r_name, "點數": str(r_pt)}])
+        st.session_state.rules_df = pd.concat([st.session_state.rules_df, new_r], ignore_index=True)
+        st.session_state.has_unsaved = True
+        st.session_state.new_rule_name = "" # 安全清空
 
 def update_rem_range():
     st.session_state.remind_range_val = st.session_state.temp_range
@@ -507,16 +520,14 @@ elif menu == "🛠️ 老師專屬後台":
         with tab_points:
             st.subheader("🌟 點數與完美卡管理")
             
+            # ✨ 修正：使用 Callback 新增班級規定，安全清空輸入框
             with st.expander("⚙️ 設定自訂班級規定 (加減分快速按鈕)"):
                 rc1, rc2, rc3 = st.columns([2, 1, 1])
-                new_r_name = rc1.text_input("規定名稱", placeholder="例：上課舉手發言", key="new_rule_name")
-                new_r_pt = rc2.number_input("點數", value=1, step=1, help="加分請輸入正數，扣分請輸入負數")
-                if rc3.button("➕ 新增規定") and new_r_name:
-                    new_r = pd.DataFrame([{"規定名稱": new_r_name, "點數": str(new_r_pt)}])
-                    st.session_state.rules_df = pd.concat([st.session_state.rules_df, new_r], ignore_index=True)
-                    st.session_state.has_unsaved = True
-                    st.session_state.new_rule_name = ""
-                    st.rerun()
+                rc1.text_input("規定名稱", placeholder="例：上課舉手發言", key="new_rule_name", on_change=add_custom_rule)
+                rc2.number_input("點數", value=1, step=1, key="new_rule_pt", help="加分請輸入正數，扣分請輸入負數")
+                
+                rc3.markdown("<br>", unsafe_allow_html=True) # 對齊
+                rc3.button("➕ 新增規定", on_click=add_custom_rule)
                 
                 if not st.session_state.rules_df.empty:
                     st.markdown("#### 目前設定的規定：")
