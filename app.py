@@ -4,19 +4,19 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-薪資節數版", layout="wide")
+st.set_page_config(page_title="303作業登記-小動物班級牆", layout="wide")
 
 st.markdown("""
 <style>
 /* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 安全字體設定：只針對真正的「文字元件」，絕對不碰會破壞系統圖示的底層 span */
-h1, h2, h3, h4, h5, h6, p, li, label, input, textarea, button, th, td, .stMarkdown {
-    font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
+/* ✨ 基礎字體設定：優先使用圓潤字體，並保護系統圖示 */
+*:not(.material-symbols-rounded):not(.material-icons) {
+    font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
-/* ✨ 針對特定圖示標籤強制還原，確保 arrow_down 與 arrow_right 正常顯示 */
+/* ✨ 保護 Streamlit 內建圖示 */
 .material-symbols-rounded, .material-icons, [data-baseweb="icon"] {
     font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
 }
@@ -29,7 +29,6 @@ h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; let
 
 /* 🎀 學生卡片變成軟綿綿的圓角 */
 .student-card {
-    font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
     border: 3px solid #FFE4E1;
     border-radius: 25px; 
     padding: 20px;
@@ -43,44 +42,51 @@ h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; let
 .student-name { margin-top: 0; margin-bottom: 15px; font-size: 1.4rem; font-weight: 700; color: #DB7093; }
 
 /* 🎀 標籤變手帳風虛線 */
-.hw-tag-red { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
-.hw-tag-orange { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
-
-/* 🎀 全班交齊的慶祝框 */
-.empty-state { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; text-align: center; padding: 60px; background-color: #E0FFFF; border-radius: 30px; border: 4px dashed #87CEEB; color: #4682B4; box-shadow: 0 10px 20px rgba(135,206,235,0.2); }
+.hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
+.hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
 
 /* 🎀 放大的分頁標籤，圓潤化 */
-button[data-baseweb="tab"] { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; font-size: 1.3rem !important; font-weight: 700 !important; padding: 1rem 1.5rem !important; border-radius: 20px 20px 0 0 !important; color: #FF7F50 !important;}
+button[data-baseweb="tab"] { font-size: 1.3rem !important; font-weight: 700 !important; padding: 1rem 1.5rem !important; border-radius: 20px 20px 0 0 !important; color: #FF7F50 !important;}
 button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !important; border-bottom: 4px solid #FF69B4 !important; }
 
 /* 🎀 按鈕變成圓滾滾的膠囊 */
-.stButton > button { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; font-size: 1.2rem !important; font-weight: 700 !important; padding: 0.6rem 1.5rem !important; border-radius: 30px !important; border: none !important; background-color: #FFB6C1 !important; color: white !important; box-shadow: 0 6px 10px rgba(255, 182, 193, 0.4) !important; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;}
+.stButton > button { font-size: 1.2rem !important; font-weight: 700 !important; padding: 0.6rem 1.5rem !important; border-radius: 30px !important; border: none !important; background-color: #FFB6C1 !important; color: white !important; box-shadow: 0 6px 10px rgba(255, 182, 193, 0.4) !important; transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;}
 .stButton > button:hover { background-color: #FF69B4 !important; transform: scale(1.08) !important; box-shadow: 0 8px 15px rgba(255, 105, 180, 0.5) !important; }
 
-/* 🎀 超醒目今日提醒框變軟萌 */
-.today-alert { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #FFF8DC; border-left: 12px solid #FFA07A; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(255, 160, 122, 0.2); margin-bottom: 30px; }
-.today-alert h3 { margin-top: 0; color: #FF7F50; font-weight: 700;}
-.today-alert ul { margin-bottom: 0; font-size: 1.3rem; color: #CD5C5C; font-weight: 700;}
+/* ✨ 針對小動物積點卡片專屬設計 */
+.animal-card {
+    background-color: #ffffff;
+    border: 3px dashed #87CEEB;
+    border-radius: 20px;
+    padding: 15px;
+    text-align: center;
+    box-shadow: 0 4px 8px rgba(135, 206, 235, 0.2);
+    margin-bottom: 15px;
+}
+.animal-avatar { font-size: 3rem; line-height: 1; margin-bottom: 5px; }
+.animal-name { font-size: 1.2rem; font-weight: 900; color: #4682B4; margin-bottom: 8px; }
+.pt-badge { background-color: #FFFACD; border: 2px solid #FFD700; color: #DAA520; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
+.card-badge { background-color: #FFE4E1; border: 2px solid #FFB6C1; color: #CD5C5C; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
 
-/* ✨ 聯絡簿專屬藍色風格框 */
-.contact-book-box { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
+/* 針對積點按鈕設計的專屬樣式 (藍色加分、紅色減分) */
+.btn-add > button { background-color: #87CEEB !important; box-shadow: 0 6px 10px rgba(135, 206, 235, 0.4) !important; }
+.btn-add > button:hover { background-color: #4682B4 !important; }
+.btn-sub > button { background-color: #FFA07A !important; box-shadow: 0 6px 10px rgba(255, 160, 122, 0.4) !important; }
+.btn-sub > button:hover { background-color: #CD5C5C !important; }
+.btn-card > button { background-color: #FFD700 !important; color: #8B4500 !important; box-shadow: 0 6px 10px rgba(255, 215, 0, 0.4) !important; }
+.btn-card > button:hover { background-color: #DAA520 !important; }
+
+.contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
 .contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
-/* ✨ 針對大字卡(Metric)的解除裁切與字體優化，因為加入了「節數」，字體稍微調小以適應寬度 */
-[data-testid="stMetricValue"] {
-    font-family: 'Fredoka One', 'Comic Sans MS', cursive !important;
-    color: #FF69B4 !important;
-    font-size: 2.2rem !important; 
-    overflow: visible !important;
-    white-space: nowrap !important; /* 保持單行顯示 */
-}
+[data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.8rem !important; overflow: visible !important; white-space: nowrap !important; }
 [data-testid="stMetricValue"] > div { overflow: visible !important; white-space: nowrap !important; }
-[data-testid="stMetricLabel"] { font-family: 'Fredoka One', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important; font-size: 1.2rem !important; white-space: normal !important; }
+[data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("📚 303 作業登記系統 ✨")
+st.title("📚 303 作業與榮譽系統 ✨")
 
 STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "王瑀淮", "李祐嘉", "郭晁瑋", "廖勇傑", "潘彥廷", "郭家宇", "王悅芯", "劉橙",
@@ -88,11 +94,22 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"
 ], 1)]
 
+# ✨ 可愛小動物清單 (用於分配給學生)
+ANIMAL_EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐧", "🐦", "🐥", "🦉", "🦄", "🐴", "🐢", "🐳"]
+
+def get_animal_emoji(sid):
+    try:
+        index = (int(sid) - 1) % len(ANIMAL_EMOJIS)
+        return ANIMAL_EMOJIS[index]
+    except:
+        return "🐾"
+
 SHEET_COLUMNS = {
     "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"],
     "Salary": ["日期", "項目", "金額"],
     "Reminders": ["日期", "事項", "狀態"],
-    "ContactBook": ["日期", "內容"]
+    "ContactBook": ["日期", "內容"],
+    "Points": ["座號", "姓名", "總積點", "完美卡"]
 }
 
 # --- 2. 核心資料與防錯邏輯 ---
@@ -123,6 +140,7 @@ def load_data(sheet_name="Sheet1"):
         df = df.fillna("")
         if not df.empty:
             df = df[~(df[expected_cols] == "").all(axis=1)]
+        
         if sheet_name == "Sheet1" and not df.empty:
             df["座號"] = df["座號"].apply(force_int_str)
             df["成績"] = df["成績"].apply(clean_score)
@@ -141,8 +159,9 @@ def save_data_to_sheet(df, sheet_name):
             empty_row = {col: "" for col in expected_cols}
             df_to_save = pd.DataFrame([empty_row])
         else:
-            if sheet_name == "Sheet1":
+            if sheet_name in ["Sheet1", "Points"]:
                 df_to_save["座號"] = df_to_save["座號"].apply(force_int_str)
+            if sheet_name == "Sheet1":
                 df_to_save["成績"] = df_to_save["成績"].apply(clean_score)
         conn.update(worksheet=sheet_name, data=df_to_save)
         return True
@@ -155,13 +174,27 @@ if 'main_df' not in st.session_state: st.session_state.main_df = load_data("Shee
 if 'salary_df' not in st.session_state: st.session_state.salary_df = load_data("Salary")
 if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_data("Reminders")
 if 'contact_df' not in st.session_state: st.session_state.contact_df = load_data("ContactBook")
+
+if 'points_df' not in st.session_state: 
+    temp_pdf = load_data("Points")
+    if temp_pdf.empty:
+        new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0"} for s in STUDENT_LIST]
+        temp_pdf = pd.DataFrame(new_pts)
+    else:
+        if "完美卡" not in temp_pdf.columns:
+            temp_pdf["完美卡"] = "0"
+    st.session_state.points_df = temp_pdf
+
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
-if "main_menu" not in st.session_state: st.session_state.main_menu = "📊 班級公佈欄"
+if "main_menu" not in st.session_state: st.session_state.main_menu = "📖 班級榮譽榜" # 改名為榮譽榜
 
 if "new_rem_input" not in st.session_state: st.session_state.new_rem_input = ""
 if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
 if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
+
+# ✨ 新增：記錄目前老師在後台點選操作的學生座號
+if "selected_point_sid" not in st.session_state: st.session_state.selected_point_sid = None
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -193,6 +226,31 @@ def update_score(idx, score_key):
         st.session_state.main_df.at[idx, "成績"] = new_val
         st.session_state.has_unsaved = True
 
+def modify_points(sid, amount):
+    mask = st.session_state.points_df['座號'] == sid
+    if mask.any():
+        idx = st.session_state.points_df.index[mask][0]
+        try: curr = int(float(st.session_state.points_df.at[idx, '總積點'] or 0))
+        except: curr = 0
+        st.session_state.points_df.at[idx, '總積點'] = str(curr + amount)
+        st.session_state.has_unsaved = True
+
+def modify_perfect_card(sid, amount):
+    mask = st.session_state.points_df['座號'] == sid
+    if mask.any():
+        idx = st.session_state.points_df.index[mask][0]
+        try: curr = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
+        except: curr = 0
+        st.session_state.points_df.at[idx, '完美卡'] = str(max(0, curr + amount))
+        st.session_state.has_unsaved = True
+
+# ✨ 設定選擇的學生
+def set_active_student(sid):
+    if st.session_state.selected_point_sid == sid:
+        st.session_state.selected_point_sid = None # 再次點擊就收起
+    else:
+        st.session_state.selected_point_sid = sid
+
 def on_hw_select():
     sel_str = st.session_state.hw_sel_widget
     st.session_state.selected_hw_base = sel_str.split(" (")[0] if sel_str != "請選擇" else "請選擇"
@@ -221,7 +279,7 @@ def update_rem_range():
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-menu = st.sidebar.radio("請選擇功能：", ["📊 班級公佈欄", "📖 每日聯絡簿", "🔍 個人查詢", "🛠️ 老師後台"], key="main_menu")
+menu = st.sidebar.radio("請選擇功能：", ["📖 班級榮譽榜", "📊 作業待辦一覽", "📓 每日聯絡簿", "🔍 個人作業查詢", "🛠️ 老師專屬後台"], key="main_menu")
 
 st.sidebar.divider()
 pwd = st.sidebar.text_input("老師密碼 (管理員專用)", type="password")
@@ -235,6 +293,7 @@ if is_admin:
             save_data_to_sheet(st.session_state.salary_df, "Salary")
             save_data_to_sheet(st.session_state.reminder_df, "Reminders")
             save_data_to_sheet(st.session_state.contact_df, "ContactBook")
+            save_data_to_sheet(st.session_state.points_df, "Points")
             st.session_state.has_unsaved = False
             st.sidebar.success("✅ 已存檔")
             st.rerun()
@@ -246,11 +305,50 @@ if st.sidebar.button("🔄 重新載入最新資料"):
     st.session_state.salary_df = load_data("Salary")
     st.session_state.reminder_df = load_data("Reminders")
     st.session_state.contact_df = load_data("ContactBook")
+    
+    temp_pdf = load_data("Points")
+    if temp_pdf.empty:
+        temp_pdf = pd.DataFrame([{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0"} for s in STUDENT_LIST])
+    else:
+        if "完美卡" not in temp_pdf.columns:
+            temp_pdf["完美卡"] = "0"
+    st.session_state.points_df = temp_pdf
+    
     st.session_state.has_unsaved = False
     st.rerun()
 
 # --- 6. 主畫面 UI ---
-if menu == "📊 班級公佈欄":
+
+# ✨ 新增：全班榮譽榜 (顯示小動物卡片)
+if menu == "📖 班級榮譽榜":
+    st.markdown("### 🏆 303 班級榮譽榜")
+    st.write("看看大家今天收集了多少點數和完美卡呢？✨")
+    
+    # 將學生分成每排 4 個或 5 個 (使用 st.columns)
+    sorted_pts = st.session_state.points_df.sort_values(by="座號", key=lambda x: pd.to_numeric(x, errors='coerce'))
+    
+    # 建立 5 欄網格顯示
+    grid_cols = st.columns(5)
+    for idx, row in sorted_pts.iterrows():
+        sid = row["座號"]
+        name = row["姓名"]
+        pt = row["總積點"] if str(row["總積點"]).strip() != "" else "0"
+        card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
+        emoji = get_animal_emoji(sid)
+        
+        with grid_cols[idx % 5]:
+            st.markdown(f'''
+            <div class="animal-card">
+                <div class="animal-avatar">{emoji}</div>
+                <div class="animal-name">{sid}. {name}</div>
+                <div>
+                    <span class="pt-badge">⭐ {pt} 點</span>
+                    <span class="card-badge">🎫 {card} 張</span>
+                </div>
+            </div>
+            ''', unsafe_allow_html=True)
+
+elif menu == "📊 作業待辦一覽":
     st.markdown("### 🏆 目前全班未完成作業總覽")
     todo_df = st.session_state.main_df[st.session_state.main_df["繳交狀態"] != "已繳交"]
     
@@ -270,8 +368,8 @@ if menu == "📊 班級公佈欄":
                     tags_html += f'<span class="{css_class}">{row["作業名稱"]} ({row["繳交狀態"]})</span>'
                 st.markdown(f'<div class="student-card"><div class="student-name">👤 {sid}. {name}</div><div>{tags_html}</div></div>', unsafe_allow_html=True)
 
-elif menu == "📖 每日聯絡簿":
-    st.markdown("### 📖 每日聯絡簿")
+elif menu == "📓 每日聯絡簿":
+    st.markdown("### 📓 每日聯絡簿")
     st.write("家長與小朋友們，請在這裡查看每日的交代事項喔！")
     
     view_date = st.date_input("📅 選擇要查看的日期", date.today(), key="view_cb_date")
@@ -290,12 +388,15 @@ elif menu == "📖 每日聯絡簿":
     </div>
     ''', unsafe_allow_html=True)
 
-elif menu == "🔍 個人查詢":
+elif menu == "🔍 個人作業查詢":
     sid = st.text_input("輸入座號查詢您的作業 (1-22)：", placeholder="例如：5")
     if sid:
-        res = st.session_state.main_df[st.session_state.main_df["座號"] == force_int_str(sid)]
+        clean_sid = force_int_str(sid)
+        
+        # 顯示作業資訊
+        res = st.session_state.main_df[st.session_state.main_df["座號"] == clean_sid]
         if not res.empty:
-            st.subheader(f"👤 {res.iloc[0]['姓名']} 的專屬待辦清單")
+            st.subheader(f"📋 {res.iloc[0]['姓名']} 專屬待辦清單")
             todo = res[res["繳交狀態"] != "已繳交"]
             if todo.empty: st.success("🎊 恭喜！你目前沒有任何欠交的作業喔！")
             else:
@@ -304,7 +405,7 @@ elif menu == "🔍 個人查詢":
                     ca.write(f"📌 **{row['作業名稱']}**")
                     cb.markdown(f":{'red' if row['繳交狀態']=='需訂正' else 'orange'}[{row['繳交狀態']}]")
 
-elif menu == "🛠️ 老師後台":
+elif menu == "🛠️ 老師專屬後台":
     if not is_admin:
         st.warning("⚠️ 這是老師專屬的秘密基地，請在左側輸入密碼喔！ 🤫")
     else:
@@ -327,7 +428,7 @@ elif menu == "🛠️ 老師後台":
                 list_html = "".join([f"<li>📌 {item}</li>" for item in active_rems])
                 st.markdown(f'<div class="today-alert"><h3>🚨 今日重要提醒</h3><ul>{list_html}</ul></div>', unsafe_allow_html=True)
 
-        tab_remind, tab_contact, tab1, tab2, tab_line, tab3, tab_money = st.tabs(["📌 提醒", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資紀錄"])
+        tab_remind, tab_points, tab_contact, tab1, tab2, tab_line, tab3, tab_money = st.tabs(["📌 提醒", "🌟 點數與完美卡", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資"])
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
@@ -360,6 +461,74 @@ elif menu == "🛠️ 老師後台":
                 if st.button("🧹 清空所有提醒"):
                     st.session_state.reminder_df = pd.DataFrame(columns=["日期", "事項", "狀態"])
                     st.session_state.has_unsaved = True; st.rerun()
+
+        # ✨ 點數與完美卡管理 - 網格與展開選單設計
+        with tab_points:
+            st.subheader("🌟 點數與完美卡管理")
+            st.write("點選下方的學生卡片，就可以對他進行加減分操作喔！")
+            
+            sorted_pts = st.session_state.points_df.sort_values(by="座號", key=lambda x: pd.to_numeric(x, errors='coerce'))
+            
+            # 使用 4 欄網格顯示按鈕
+            grid_cols = st.columns(4)
+            for idx, row in sorted_pts.iterrows():
+                sid = row["座號"]
+                name = row["姓名"]
+                pt = row["總積點"] if str(row["總積點"]).strip() != "" else "0"
+                card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
+                emoji = get_animal_emoji(sid)
+                
+                with grid_cols[idx % 4]:
+                    btn_text = f"{emoji} {sid}. {name}\n⭐{pt} | 🎫{card}"
+                    # 點擊按鈕，設定此學生為 active
+                    st.button(btn_text, key=f"btn_stu_{sid}", on_click=set_active_student, args=(sid,), use_container_width=True)
+
+            # 如果有選擇學生，就在下方展開專屬操作面板
+            if st.session_state.selected_point_sid:
+                st.divider()
+                sel_sid = st.session_state.selected_point_sid
+                sel_row = st.session_state.points_df[st.session_state.points_df["座號"] == sel_sid].iloc[0]
+                
+                st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}")
+                
+                st.markdown("#### ⚡ 快速增減積點")
+                st.markdown('<div class="btn-add">', unsafe_allow_html=True)
+                a1, a2, a3, a4, a5 = st.columns(5)
+                a1.button("➕ 1", on_click=modify_points, args=(sel_sid, 1), use_container_width=True, key=f"add_1_{sel_sid}")
+                a2.button("➕ 5", on_click=modify_points, args=(sel_sid, 5), use_container_width=True, key=f"add_5_{sel_sid}")
+                a3.button("➕ 10", on_click=modify_points, args=(sel_sid, 10), use_container_width=True, key=f"add_10_{sel_sid}")
+                a4.button("➕ 50", on_click=modify_points, args=(sel_sid, 50), use_container_width=True, key=f"add_50_{sel_sid}")
+                a5.button("➕ 100", on_click=modify_points, args=(sel_sid, 100), use_container_width=True, key=f"add_100_{sel_sid}")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('<div class="btn-sub">', unsafe_allow_html=True)
+                s1, s2, s3, s4, s5 = st.columns(5)
+                s1.button("➖ 1", on_click=modify_points, args=(sel_sid, -1), use_container_width=True, key=f"sub_1_{sel_sid}")
+                s2.button("➖ 5", on_click=modify_points, args=(sel_sid, -5), use_container_width=True, key=f"sub_5_{sel_sid}")
+                s3.button("➖ 10", on_click=modify_points, args=(sel_sid, -10), use_container_width=True, key=f"sub_10_{sel_sid}")
+                s4.button("➖ 50", on_click=modify_points, args=(sel_sid, -50), use_container_width=True, key=f"sub_50_{sel_sid}")
+                s5.button("➖ 100", on_click=modify_points, args=(sel_sid, -100), use_container_width=True, key=f"sub_100_{sel_sid}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+                
+                st.markdown("#### 🎫 完美卡管理")
+                st.markdown('<div class="btn-card">', unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                c1.button("➕ 獲得 1 張完美卡", on_click=modify_perfect_card, args=(sel_sid, 1), use_container_width=True, key=f"card_add_{sel_sid}")
+                c2.button("➖ 扣除次數 (兌換使用)", on_click=modify_perfect_card, args=(sel_sid, -1), use_container_width=True, key=f"card_sub_{sel_sid}")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.info("💡 操作完畢後，您可以點擊上方其他學生繼續修改，或是點選同一位學生來收起此面板。")
+            
+            st.divider()
+            with st.expander("⚠️ 危險操作區"):
+                if st.button("🔄 將全班積點與完美卡歸零"):
+                    st.session_state.points_df["總積點"] = "0"
+                    st.session_state.points_df["完美卡"] = "0"
+                    st.session_state.has_unsaved = True
+                    st.session_state.selected_point_sid = None
+                    st.rerun()
 
         with tab_contact:
             st.subheader("📖 編輯每日聯絡簿")
@@ -488,18 +657,15 @@ elif menu == "🛠️ 老師後台":
 
                 total_sum = pd.to_numeric(m_df['金額'], errors='coerce').sum()
                 
-                # ✨ 新增：計算各項目的「出現次數 (節數)」與「總金額」
                 cat_data = m_df.groupby("項目").agg(
                     節數=('項目', 'count'),
                     金額=('金額', lambda x: pd.to_numeric(x, errors='coerce').sum())
                 ).to_dict('index')
 
-                # 安全提取資料的輔助函式 (格式：XX節 / $YYYY)
                 def get_metric_str(item_name):
                     data = cat_data.get(item_name, {'節數': 0, '金額': 0})
                     return f"{data['節數']}節 / ${data['金額']:,}"
 
-                # ✨ 1+2+2 排版，同時顯示總計金額與各分類的節數與金額
                 st.metric(f"💎 {selected_month} 總計金額", f"${total_sum:,}")
                 
                 m1, m2 = st.columns(2)
