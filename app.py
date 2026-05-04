@@ -11,13 +11,22 @@ st.markdown("""
 /* ✨ 導入字體：Kalam (一般手寫), Fredoka One (圓胖數字專用), 霞鶩文楷 (中文) */
 @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Kalam:wght@400;700&family=LXGW+WenKai+TC:wght@400;700&display=swap');
 
-/* ✨ 基礎字體設定：優先使用圓潤字體，並保護系統圖示 */
-*:not(.material-symbols-rounded):not(.material-icons) {
+/* ✨ 基礎字體設定：指定所有文字區塊套用可愛字體 */
+html, body, p, div, span, h1, h2, h3, h4, h5, h6, li, label, input, textarea, button, th, td, .stMarkdown {
     font-family: 'Fredoka One', 'Varela Round', 'Kalam', 'LXGW WenKai TC', 'Comic Sans MS', cursive !important;
 }
 
-/* ✨ 保護 Streamlit 內建圖示 */
-.material-symbols-rounded, .material-icons, [data-baseweb="icon"] {
+/* 🛡️ 終極圖示保護機制：將所有負責顯示圖示的元件（包含摺疊選單箭頭）徹底隔離，強制使用系統圖示字體 */
+.material-symbols-rounded, 
+.material-icons, 
+[data-baseweb="icon"], 
+[data-baseweb="icon"] *, 
+[data-testid*="Icon"], 
+[data-testid*="Icon"] *, 
+[data-testid*="icon"], 
+[data-testid*="icon"] *, 
+svg, 
+svg * {
     font-family: 'Material Symbols Rounded', 'Material Icons', sans-serif !important;
 }
 
@@ -103,7 +112,6 @@ def get_animal_emoji(sid):
     except:
         return "🐾"
 
-# ✨ 加入 Rules 分頁欄位定義
 SHEET_COLUMNS = {
     "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"],
     "Salary": ["日期", "項目", "金額"],
@@ -175,8 +183,6 @@ if 'main_df' not in st.session_state: st.session_state.main_df = load_data("Shee
 if 'salary_df' not in st.session_state: st.session_state.salary_df = load_data("Salary")
 if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_data("Reminders")
 if 'contact_df' not in st.session_state: st.session_state.contact_df = load_data("ContactBook")
-
-# ✨ 載入 Rules 資料
 if 'rules_df' not in st.session_state: st.session_state.rules_df = load_data("Rules")
 
 if 'points_df' not in st.session_state: 
@@ -304,7 +310,7 @@ if is_admin:
             save_data_to_sheet(st.session_state.reminder_df, "Reminders")
             save_data_to_sheet(st.session_state.contact_df, "ContactBook")
             save_data_to_sheet(st.session_state.points_df, "Points")
-            save_data_to_sheet(st.session_state.rules_df, "Rules") # ✨ 儲存規則表
+            save_data_to_sheet(st.session_state.rules_df, "Rules")
             st.session_state.has_unsaved = False
             st.sidebar.success("✅ 已存檔")
             st.rerun()
@@ -501,7 +507,6 @@ elif menu == "🛠️ 老師專屬後台":
         with tab_points:
             st.subheader("🌟 點數與完美卡管理")
             
-            # ✨ 新增：班級規定設定區塊 (隱藏式，避免佔用主要畫面)
             with st.expander("⚙️ 設定自訂班級規定 (加減分快速按鈕)"):
                 rc1, rc2, rc3 = st.columns([2, 1, 1])
                 new_r_name = rc1.text_input("規定名稱", placeholder="例：上課舉手發言", key="new_rule_name")
@@ -547,7 +552,6 @@ elif menu == "🛠️ 老師專屬後台":
                 
                 st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}")
                 
-                # ✨ 新增：自訂班級規定快速按鈕
                 if not st.session_state.rules_df.empty:
                     st.markdown("#### 📜 套用班級規定")
                     st.markdown('<div class="btn-rule">', unsafe_allow_html=True)
