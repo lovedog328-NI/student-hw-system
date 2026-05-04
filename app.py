@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-班級規定修復版", layout="wide")
+st.set_page_config(page_title="303作業登記-全班加分版", layout="wide")
 
 st.markdown("""
 <style>
@@ -69,7 +69,7 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .pt-badge { background-color: #FFFACD; border: 2px solid #FFD700; color: #DAA520; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
 .card-badge { background-color: #FFE4E1; border: 2px solid #FFB6C1; color: #CD5C5C; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
 
-/* 針對積點按鈕設計的專屬樣式 (藍色加分、紅色減分、紫色班級規定) */
+/* 針對積點按鈕設計的專屬樣式 (藍色加分、紅色減分、紫色班級規定、綠色全班) */
 .btn-add > button { background-color: #87CEEB !important; box-shadow: 0 6px 10px rgba(135, 206, 235, 0.4) !important; }
 .btn-add > button:hover { background-color: #4682B4 !important; }
 .btn-sub > button { background-color: #FFA07A !important; box-shadow: 0 6px 10px rgba(255, 160, 122, 0.4) !important; }
@@ -78,6 +78,8 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-card > button:hover { background-color: #DAA520 !important; }
 .btn-rule > button { background-color: #9370DB !important; box-shadow: 0 6px 10px rgba(147, 112, 219, 0.4) !important; }
 .btn-rule > button:hover { background-color: #6A5ACD !important; }
+.btn-all > button { background-color: #3CB371 !important; box-shadow: 0 6px 10px rgba(60, 179, 113, 0.4) !important; }
+.btn-all > button:hover { background-color: #2E8B57 !important; }
 
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
@@ -204,7 +206,6 @@ if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
 if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
 if "selected_point_sid" not in st.session_state: st.session_state.selected_point_sid = None
 
-# ✨ 初始化班級規定的暫存變數
 if "new_rule_name" not in st.session_state: st.session_state.new_rule_name = ""
 if "new_rule_pt" not in st.session_state: st.session_state.new_rule_pt = 1
 
@@ -256,6 +257,17 @@ def modify_perfect_card(sid, amount):
         st.session_state.points_df.at[idx, '完美卡'] = str(max(0, curr + amount))
         st.session_state.has_unsaved = True
 
+# ✨ 新增：全班統一加減分 Callback
+def modify_all_points(amount):
+    if not st.session_state.points_df.empty:
+        for idx in st.session_state.points_df.index:
+            try:
+                curr = int(float(st.session_state.points_df.at[idx, '總積點'] or 0))
+            except:
+                curr = 0
+            st.session_state.points_df.at[idx, '總積點'] = str(curr + amount)
+        st.session_state.has_unsaved = True
+
 def change_avatar(sid):
     new_avatar = st.session_state[f"avatar_sel_{sid}"]
     mask = st.session_state.points_df['座號'] == sid
@@ -292,7 +304,6 @@ def add_homework():
     st.session_state.has_unsaved = True
     st.session_state.new_hw_input = "" 
 
-# ✨ Callback：新增班級規定
 def add_custom_rule():
     r_name = st.session_state.new_rule_name.strip()
     r_pt = st.session_state.new_rule_pt
@@ -300,7 +311,7 @@ def add_custom_rule():
         new_r = pd.DataFrame([{"規定名稱": r_name, "點數": str(r_pt)}])
         st.session_state.rules_df = pd.concat([st.session_state.rules_df, new_r], ignore_index=True)
         st.session_state.has_unsaved = True
-        st.session_state.new_rule_name = "" # 安全清空
+        st.session_state.new_rule_name = "" 
 
 def update_rem_range():
     st.session_state.remind_range_val = st.session_state.temp_range
@@ -520,13 +531,22 @@ elif menu == "🛠️ 老師專屬後台":
         with tab_points:
             st.subheader("🌟 點數與完美卡管理")
             
-            # ✨ 修正：使用 Callback 新增班級規定，安全清空輸入框
+            # ✨ 新增：全班統一加減分摺疊區塊
+            with st.expander("📣 全班統一加減分 (一鍵套用全班)"):
+                st.markdown('<div class="btn-all">', unsafe_allow_html=True)
+                ca1, ca2, ca3, ca4 = st.columns(4)
+                ca1.button("🚀 全班 ➕ 1 點", on_click=modify_all_points, args=(1,), use_container_width=True, key="all_add_1")
+                ca2.button("🚀 全班 ➕ 5 點", on_click=modify_all_points, args=(5,), use_container_width=True, key="all_add_5")
+                ca3.button("🌧️ 全班 ➖ 1 點", on_click=modify_all_points, args=(-1,), use_container_width=True, key="all_sub_1")
+                ca4.button("🌧️ 全班 ➖ 5 點", on_click=modify_all_points, args=(-5,), use_container_width=True, key="all_sub_5")
+                st.markdown('</div>', unsafe_allow_html=True)
+
             with st.expander("⚙️ 設定自訂班級規定 (加減分快速按鈕)"):
                 rc1, rc2, rc3 = st.columns([2, 1, 1])
                 rc1.text_input("規定名稱", placeholder="例：上課舉手發言", key="new_rule_name", on_change=add_custom_rule)
                 rc2.number_input("點數", value=1, step=1, key="new_rule_pt", help="加分請輸入正數，扣分請輸入負數")
                 
-                rc3.markdown("<br>", unsafe_allow_html=True) # 對齊
+                rc3.markdown("<br>", unsafe_allow_html=True)
                 rc3.button("➕ 新增規定", on_click=add_custom_rule)
                 
                 if not st.session_state.rules_df.empty:
@@ -540,7 +560,7 @@ elif menu == "🛠️ 老師專屬後台":
                             st.session_state.has_unsaved = True
                             st.rerun()
 
-            st.write("點選下方的學生卡片，就可以對他進行加減分操作喔！")
+            st.write("點選下方的學生卡片，就可以對「個別學生」進行操作喔！")
             
             sorted_pts = st.session_state.points_df.sort_values(by="座號", key=lambda x: pd.to_numeric(x, errors='coerce'))
             
