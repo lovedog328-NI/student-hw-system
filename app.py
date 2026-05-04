@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-全班加分版", layout="wide")
+st.set_page_config(page_title="303作業登記-綜合狀態版", layout="wide")
 
 st.markdown("""
 <style>
@@ -63,13 +63,17 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .stButton > button:hover { background-color: #FF69B4 !important; transform: scale(1.08) !important; box-shadow: 0 8px 15px rgba(255, 105, 180, 0.5) !important; }
 
 /* ✨ 針對小動物積點卡片專屬設計 */
-.animal-card { background-color: #ffffff; border: 3px dashed #87CEEB; border-radius: 20px; padding: 15px; text-align: center; box-shadow: 0 4px 8px rgba(135, 206, 235, 0.2); margin-bottom: 15px; }
+.animal-card { background-color: #ffffff; border: 3px dashed #87CEEB; border-radius: 20px; padding: 15px; text-align: center; box-shadow: 0 4px 8px rgba(135, 206, 235, 0.2); margin-bottom: 15px; position: relative; }
 .animal-avatar { font-size: 3rem; line-height: 1; margin-bottom: 5px; }
 .animal-name { font-size: 1.2rem; font-weight: 900; color: #4682B4; margin-bottom: 8px; }
-.pt-badge { background-color: #FFFACD; border: 2px solid #FFD700; color: #DAA520; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
-.card-badge { background-color: #FFE4E1; border: 2px solid #FFB6C1; color: #CD5C5C; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
+.pt-badge { background-color: #FFFACD; border: 2px solid #FFD700; color: #DAA520; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 0.9rem; display: inline-block; margin: 2px; }
+.card-badge { background-color: #FFE4E1; border: 2px solid #FFB6C1; color: #CD5C5C; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 0.9rem; display: inline-block; margin: 2px; }
 
-/* 針對積點按鈕設計的專屬樣式 (藍色加分、紅色減分、紫色班級規定、綠色全班) */
+/* ✨ 狀態標籤樣式 */
+.status-ok { background-color: #E0FFF0; color: #2E8B57; border-radius: 10px; padding: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 8px; border: 1px dashed #3CB371; }
+.status-bad { background-color: #FFF0F0; color: #DC143C; border-radius: 10px; padding: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 8px; border: 1px dashed #CD5C5C; }
+
+/* 針對積點按鈕設計的專屬樣式 */
 .btn-add > button { background-color: #87CEEB !important; box-shadow: 0 6px 10px rgba(135, 206, 235, 0.4) !important; }
 .btn-add > button:hover { background-color: #4682B4 !important; }
 .btn-sub > button { background-color: #FFA07A !important; box-shadow: 0 6px 10px rgba(255, 160, 122, 0.4) !important; }
@@ -80,6 +84,12 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-rule > button:hover { background-color: #6A5ACD !important; }
 .btn-all > button { background-color: #3CB371 !important; box-shadow: 0 6px 10px rgba(60, 179, 113, 0.4) !important; }
 .btn-all > button:hover { background-color: #2E8B57 !important; }
+
+/* 懲罰按鈕專屬 */
+.btn-punish > button { background-color: #696969 !important; box-shadow: 0 6px 10px rgba(105, 105, 105, 0.4) !important; }
+.btn-punish > button:hover { background-color: #2F4F4F !important; }
+.btn-free > button { background-color: #20B2AA !important; box-shadow: 0 6px 10px rgba(32, 178, 170, 0.4) !important; }
+.btn-free > button:hover { background-color: #008080 !important; }
 
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
@@ -119,7 +129,7 @@ SHEET_COLUMNS = {
     "Salary": ["日期", "項目", "金額"],
     "Reminders": ["日期", "事項", "狀態"],
     "ContactBook": ["日期", "內容"],
-    "Points": ["座號", "姓名", "總積點", "完美卡", "頭像"],
+    "Points": ["座號", "姓名", "總積點", "完美卡", "頭像", "懲罰結束日期"],
     "Rules": ["規定名稱", "點數"] 
 }
 
@@ -190,11 +200,12 @@ if 'rules_df' not in st.session_state: st.session_state.rules_df = load_data("Ru
 if 'points_df' not in st.session_state: 
     temp_pdf = load_data("Points")
     if temp_pdf.empty:
-        new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": ""} for s in STUDENT_LIST]
+        new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST]
         temp_pdf = pd.DataFrame(new_pts)
     else:
         if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
         if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
+        if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
     st.session_state.points_df = temp_pdf
 
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
@@ -257,7 +268,6 @@ def modify_perfect_card(sid, amount):
         st.session_state.points_df.at[idx, '完美卡'] = str(max(0, curr + amount))
         st.session_state.has_unsaved = True
 
-# ✨ 新增：全班統一加減分 Callback
 def modify_all_points(amount):
     if not st.session_state.points_df.empty:
         for idx in st.session_state.points_df.index:
@@ -266,6 +276,28 @@ def modify_all_points(amount):
             except:
                 curr = 0
             st.session_state.points_df.at[idx, '總積點'] = str(curr + amount)
+        st.session_state.has_unsaved = True
+
+def modify_punishment(sid, add_days):
+    mask = st.session_state.points_df['座號'] == sid
+    if mask.any():
+        idx = st.session_state.points_df.index[mask][0]
+        today = date.today()
+        
+        if add_days == 0:  
+            st.session_state.points_df.at[idx, '懲罰結束日期'] = ""
+        else:
+            curr_str = st.session_state.points_df.at[idx, '懲罰結束日期']
+            try:
+                curr_end = datetime.strptime(str(curr_str), '%Y-%m-%d').date()
+                if curr_end < today:
+                    curr_end = today - timedelta(days=1)
+            except:
+                curr_end = today - timedelta(days=1)
+                
+            new_end = curr_end + timedelta(days=add_days)
+            st.session_state.points_df.at[idx, '懲罰結束日期'] = str(new_end)
+            
         st.session_state.has_unsaved = True
 
 def change_avatar(sid):
@@ -316,6 +348,37 @@ def add_custom_rule():
 def update_rem_range():
     st.session_state.remind_range_val = st.session_state.temp_range
 
+# ✨ 升級版輔助函數：結合「作業缺交」與「懲罰天數」判斷下課狀態
+def get_student_status(pt_row, main_df, sid):
+    # 1. 檢查懲罰狀態
+    end_str = pt_row.get('懲罰結束日期', "")
+    is_punished = False
+    punish_text = ""
+    try:
+        end_date = datetime.strptime(str(end_str), '%Y-%m-%d').date()
+        today = date.today()
+        if end_date >= today:
+            days_left = (end_date - today).days + 1
+            is_punished = True
+            punish_text = f"🛑 罰 {days_left} 天"
+    except:
+        pass
+    
+    # 2. 檢查作業缺交狀態
+    hw_df = main_df[main_df["座號"] == str(sid)]
+    missing_hw = hw_df[hw_df["繳交狀態"] != "已繳交"]
+    hw_missing_count = len(missing_hw)
+    
+    # 3. 綜合判斷能不能下課
+    if is_punished and hw_missing_count > 0:
+        return False, f"{punish_text} & 欠 {hw_missing_count} 項作業"
+    elif is_punished:
+        return False, f"{punish_text}"
+    elif hw_missing_count > 0:
+        return False, f"🔴 欠 {hw_missing_count} 項作業"
+    else:
+        return True, "🟢 可以下課"
+
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
@@ -350,10 +413,11 @@ if st.sidebar.button("🔄 重新載入最新資料"):
     
     temp_pdf = load_data("Points")
     if temp_pdf.empty:
-        temp_pdf = pd.DataFrame([{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": ""} for s in STUDENT_LIST])
+        temp_pdf = pd.DataFrame([{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST])
     else:
         if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
         if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
+        if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
     st.session_state.points_df = temp_pdf
     
     st.session_state.has_unsaved = False
@@ -375,6 +439,10 @@ if menu == "📖 班級榮譽榜":
         card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
         emoji = get_animal_emoji(sid)
         
+        # ✨ 呼叫綜合判斷函數
+        is_ok, status_text = get_student_status(row, st.session_state.main_df, sid)
+        status_class = "status-ok" if is_ok else "status-bad"
+        
         with grid_cols[idx % 5]:
             st.markdown(f'''
             <div class="animal-card">
@@ -384,6 +452,7 @@ if menu == "📖 班級榮譽榜":
                     <span class="pt-badge">⭐ {pt} 點</span>
                     <span class="card-badge">🎫 {card} 張</span>
                 </div>
+                <div class="{status_class}">{status_text}</div>
             </div>
             ''', unsafe_allow_html=True)
 
@@ -450,15 +519,20 @@ elif menu == "🔍 個人作業查詢":
             
             res_pt = st.session_state.points_df[st.session_state.points_df["座號"] == clean_sid]
             pts, cards = 0, 0
+            is_ok, status_text = True, "🟢 可以下課"
             if not res_pt.empty:
                 try: pts = int(float(res_pt.iloc[0]['總積點'] or 0))
                 except: pts = 0
                 try: cards = int(float(res_pt.iloc[0]['完美卡'] or 0))
                 except: cards = 0
+                
+                # ✨ 呼叫綜合判斷函數
+                is_ok, status_text = get_student_status(res_pt.iloc[0], st.session_state.main_df, clean_sid)
             
-            mc1, mc2 = st.columns(2)
+            mc1, mc2, mc3 = st.columns(3)
             mc1.metric("🌟 目前積點", f"{pts} 點")
             mc2.metric("🎫 完美卡數量", f"{cards} 張")
+            mc3.metric("🚦 目前狀態", status_text if not is_ok else "🟢 可以下課")
             st.divider()
 
             st.subheader(f"📋 專屬待辦清單")
@@ -531,7 +605,6 @@ elif menu == "🛠️ 老師專屬後台":
         with tab_points:
             st.subheader("🌟 點數與完美卡管理")
             
-            # ✨ 新增：全班統一加減分摺疊區塊
             with st.expander("📣 全班統一加減分 (一鍵套用全班)"):
                 st.markdown('<div class="btn-all">', unsafe_allow_html=True)
                 ca1, ca2, ca3, ca4 = st.columns(4)
@@ -572,8 +645,12 @@ elif menu == "🛠️ 老師專屬後台":
                 card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
                 emoji = get_animal_emoji(sid)
                 
+                # ✨ 呼叫綜合判斷函數更新按鈕上的小燈號
+                is_ok, _ = get_student_status(row, st.session_state.main_df, sid)
+                btn_status = "🟢" if is_ok else "🔴"
+                
                 with grid_cols[idx % 4]:
-                    btn_text = f"{emoji} {sid}. {name}\n⭐{pt} | 🎫{card}"
+                    btn_text = f"{emoji} {sid}. {name} {btn_status}\n⭐{pt} | 🎫{card}"
                     st.button(btn_text, key=f"btn_stu_{sid}", on_click=set_active_student, args=(sid,), use_container_width=True)
 
             if st.session_state.selected_point_sid:
@@ -581,7 +658,10 @@ elif menu == "🛠️ 老師專屬後台":
                 sel_sid = st.session_state.selected_point_sid
                 sel_row = st.session_state.points_df[st.session_state.points_df["座號"] == sel_sid].iloc[0]
                 
-                st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}")
+                # ✨ 在展開的操作面板顯示最新狀態
+                is_ok, status_text = get_student_status(sel_row, st.session_state.main_df, sel_sid)
+                
+                st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_text}")
                 
                 if not st.session_state.rules_df.empty:
                     st.markdown("#### 📜 套用班級規定")
@@ -621,6 +701,19 @@ elif menu == "🛠️ 老師專屬後台":
                 c1, c2 = st.columns(2)
                 c1.button("➕ 獲得 1 張完美卡", on_click=modify_perfect_card, args=(sel_sid, 1), use_container_width=True, key=f"card_add_{sel_sid}")
                 c2.button("➖ 扣除次數 (兌換使用)", on_click=modify_perfect_card, args=(sel_sid, -1), use_container_width=True, key=f"card_sub_{sel_sid}")
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                st.markdown("<br>", unsafe_allow_html=True)
+
+                st.markdown("#### 🛑 狀態與懲罰管理")
+                st.markdown('<div class="btn-punish">', unsafe_allow_html=True)
+                p1, p2, p3 = st.columns(3)
+                p1.button("➕ 罰 1 天不能下課", on_click=modify_punishment, args=(sel_sid, 1), use_container_width=True, key=f"punish_1_{sel_sid}")
+                p2.button("➕ 罰 3 天不能下課", on_click=modify_punishment, args=(sel_sid, 3), use_container_width=True, key=f"punish_3_{sel_sid}")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('<div class="btn-free">', unsafe_allow_html=True)
+                p3.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
                 st.markdown('</div>', unsafe_allow_html=True)
                 
                 st.info("💡 操作完畢後，您可以點擊上方其他學生繼續修改，或是點選同一位學生來收起此面板。")
