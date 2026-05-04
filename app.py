@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-小動物班級牆", layout="wide")
+st.set_page_config(page_title="303作業登記-班級規定版", layout="wide")
 
 st.markdown("""
 <style>
@@ -54,27 +54,21 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .stButton > button:hover { background-color: #FF69B4 !important; transform: scale(1.08) !important; box-shadow: 0 8px 15px rgba(255, 105, 180, 0.5) !important; }
 
 /* ✨ 針對小動物積點卡片專屬設計 */
-.animal-card {
-    background-color: #ffffff;
-    border: 3px dashed #87CEEB;
-    border-radius: 20px;
-    padding: 15px;
-    text-align: center;
-    box-shadow: 0 4px 8px rgba(135, 206, 235, 0.2);
-    margin-bottom: 15px;
-}
+.animal-card { background-color: #ffffff; border: 3px dashed #87CEEB; border-radius: 20px; padding: 15px; text-align: center; box-shadow: 0 4px 8px rgba(135, 206, 235, 0.2); margin-bottom: 15px; }
 .animal-avatar { font-size: 3rem; line-height: 1; margin-bottom: 5px; }
 .animal-name { font-size: 1.2rem; font-weight: 900; color: #4682B4; margin-bottom: 8px; }
 .pt-badge { background-color: #FFFACD; border: 2px solid #FFD700; color: #DAA520; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
 .card-badge { background-color: #FFE4E1; border: 2px solid #FFB6C1; color: #CD5C5C; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 1rem; display: inline-block; margin: 2px; }
 
-/* 針對積點按鈕設計的專屬樣式 (藍色加分、紅色減分) */
+/* 針對積點按鈕設計的專屬樣式 (藍色加分、紅色減分、紫色班級規定) */
 .btn-add > button { background-color: #87CEEB !important; box-shadow: 0 6px 10px rgba(135, 206, 235, 0.4) !important; }
 .btn-add > button:hover { background-color: #4682B4 !important; }
 .btn-sub > button { background-color: #FFA07A !important; box-shadow: 0 6px 10px rgba(255, 160, 122, 0.4) !important; }
 .btn-sub > button:hover { background-color: #CD5C5C !important; }
 .btn-card > button { background-color: #FFD700 !important; color: #8B4500 !important; box-shadow: 0 6px 10px rgba(255, 215, 0, 0.4) !important; }
 .btn-card > button:hover { background-color: #DAA520 !important; }
+.btn-rule > button { background-color: #9370DB !important; box-shadow: 0 6px 10px rgba(147, 112, 219, 0.4) !important; }
+.btn-rule > button:hover { background-color: #6A5ACD !important; }
 
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
@@ -94,22 +88,29 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"
 ], 1)]
 
-# ✨ 可愛小動物清單 (用於分配給學生)
-ANIMAL_EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🐷", "🐸", "🐵", "🐧", "🐦", "🐥", "🦉", "🦄", "🐴", "🐢", "🐳"]
+ANIMAL_EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🦔", "🐸", "🐵", "🐧", "🐦", "🐥", "🦉", "🦄", "🐴", "🐢", "🐳", "🦦", "🦥"]
 
 def get_animal_emoji(sid):
     try:
+        if 'points_df' in st.session_state and not st.session_state.points_df.empty:
+            mask = st.session_state.points_df["座號"] == str(sid)
+            if mask.any():
+                avatar = str(st.session_state.points_df.loc[mask, "頭像"].values[0]).strip()
+                if avatar and avatar in ANIMAL_EMOJIS:
+                    return avatar
         index = (int(sid) - 1) % len(ANIMAL_EMOJIS)
         return ANIMAL_EMOJIS[index]
     except:
         return "🐾"
 
+# ✨ 加入 Rules 分頁欄位定義
 SHEET_COLUMNS = {
     "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"],
     "Salary": ["日期", "項目", "金額"],
     "Reminders": ["日期", "事項", "狀態"],
     "ContactBook": ["日期", "內容"],
-    "Points": ["座號", "姓名", "總積點", "完美卡"]
+    "Points": ["座號", "姓名", "總積點", "完美卡", "頭像"],
+    "Rules": ["規定名稱", "點數"] 
 }
 
 # --- 2. 核心資料與防錯邏輯 ---
@@ -175,26 +176,28 @@ if 'salary_df' not in st.session_state: st.session_state.salary_df = load_data("
 if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_data("Reminders")
 if 'contact_df' not in st.session_state: st.session_state.contact_df = load_data("ContactBook")
 
+# ✨ 載入 Rules 資料
+if 'rules_df' not in st.session_state: st.session_state.rules_df = load_data("Rules")
+
 if 'points_df' not in st.session_state: 
     temp_pdf = load_data("Points")
     if temp_pdf.empty:
-        new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0"} for s in STUDENT_LIST]
+        new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": ""} for s in STUDENT_LIST]
         temp_pdf = pd.DataFrame(new_pts)
     else:
-        if "完美卡" not in temp_pdf.columns:
-            temp_pdf["完美卡"] = "0"
+        if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
+        if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
     st.session_state.points_df = temp_pdf
 
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
-if "main_menu" not in st.session_state: st.session_state.main_menu = "📖 班級榮譽榜" # 改名為榮譽榜
+if "main_menu" not in st.session_state: st.session_state.main_menu = "📖 班級榮譽榜"
 
 if "new_rem_input" not in st.session_state: st.session_state.new_rem_input = ""
 if "new_hw_input" not in st.session_state: st.session_state.new_hw_input = ""
 if "remind_range_val" not in st.session_state: st.session_state.remind_range_val = [date.today(), date.today() + timedelta(days=2)]
-
-# ✨ 新增：記錄目前老師在後台點選操作的學生座號
 if "selected_point_sid" not in st.session_state: st.session_state.selected_point_sid = None
+if "new_rule_name" not in st.session_state: st.session_state.new_rule_name = ""
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -244,10 +247,17 @@ def modify_perfect_card(sid, amount):
         st.session_state.points_df.at[idx, '完美卡'] = str(max(0, curr + amount))
         st.session_state.has_unsaved = True
 
-# ✨ 設定選擇的學生
+def change_avatar(sid):
+    new_avatar = st.session_state[f"avatar_sel_{sid}"]
+    mask = st.session_state.points_df['座號'] == sid
+    if mask.any():
+        idx = st.session_state.points_df.index[mask][0]
+        st.session_state.points_df.at[idx, '頭像'] = new_avatar
+        st.session_state.has_unsaved = True
+
 def set_active_student(sid):
     if st.session_state.selected_point_sid == sid:
-        st.session_state.selected_point_sid = None # 再次點擊就收起
+        st.session_state.selected_point_sid = None
     else:
         st.session_state.selected_point_sid = sid
 
@@ -294,6 +304,7 @@ if is_admin:
             save_data_to_sheet(st.session_state.reminder_df, "Reminders")
             save_data_to_sheet(st.session_state.contact_df, "ContactBook")
             save_data_to_sheet(st.session_state.points_df, "Points")
+            save_data_to_sheet(st.session_state.rules_df, "Rules") # ✨ 儲存規則表
             st.session_state.has_unsaved = False
             st.sidebar.success("✅ 已存檔")
             st.rerun()
@@ -305,13 +316,14 @@ if st.sidebar.button("🔄 重新載入最新資料"):
     st.session_state.salary_df = load_data("Salary")
     st.session_state.reminder_df = load_data("Reminders")
     st.session_state.contact_df = load_data("ContactBook")
+    st.session_state.rules_df = load_data("Rules")
     
     temp_pdf = load_data("Points")
     if temp_pdf.empty:
-        temp_pdf = pd.DataFrame([{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0"} for s in STUDENT_LIST])
+        temp_pdf = pd.DataFrame([{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": ""} for s in STUDENT_LIST])
     else:
-        if "完美卡" not in temp_pdf.columns:
-            temp_pdf["完美卡"] = "0"
+        if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
+        if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
     st.session_state.points_df = temp_pdf
     
     st.session_state.has_unsaved = False
@@ -319,15 +331,12 @@ if st.sidebar.button("🔄 重新載入最新資料"):
 
 # --- 6. 主畫面 UI ---
 
-# ✨ 新增：全班榮譽榜 (顯示小動物卡片)
 if menu == "📖 班級榮譽榜":
     st.markdown("### 🏆 303 班級榮譽榜")
     st.write("看看大家今天收集了多少點數和完美卡呢？✨")
     
-    # 將學生分成每排 4 個或 5 個 (使用 st.columns)
     sorted_pts = st.session_state.points_df.sort_values(by="座號", key=lambda x: pd.to_numeric(x, errors='coerce'))
     
-    # 建立 5 欄網格顯示
     grid_cols = st.columns(5)
     for idx, row in sorted_pts.iterrows():
         sid = row["座號"]
@@ -392,13 +401,40 @@ elif menu == "🔍 個人作業查詢":
     sid = st.text_input("輸入座號查詢您的作業 (1-22)：", placeholder="例如：5")
     if sid:
         clean_sid = force_int_str(sid)
-        
-        # 顯示作業資訊
         res = st.session_state.main_df[st.session_state.main_df["座號"] == clean_sid]
+        
         if not res.empty:
-            st.subheader(f"📋 {res.iloc[0]['姓名']} 專屬待辦清單")
+            stu_name = res.iloc[0]['姓名']
+            st.markdown(f"### 👤 {stu_name} 的專屬空間")
+            
+            curr_avatar = get_animal_emoji(clean_sid)
+            c_img, c_sel = st.columns([1, 4])
+            with c_img:
+                st.markdown(f"<div style='font-size: 4rem; text-align: center; margin-top: -10px;'>{curr_avatar}</div>", unsafe_allow_html=True)
+            with c_sel:
+                try: curr_idx = ANIMAL_EMOJIS.index(curr_avatar)
+                except: curr_idx = 0
+                st.selectbox("🐾 換一個喜歡的小動物：", ANIMAL_EMOJIS, index=curr_idx, key=f"avatar_sel_{clean_sid}", on_change=change_avatar, args=(clean_sid,))
+            
+            st.divider()
+            
+            res_pt = st.session_state.points_df[st.session_state.points_df["座號"] == clean_sid]
+            pts, cards = 0, 0
+            if not res_pt.empty:
+                try: pts = int(float(res_pt.iloc[0]['總積點'] or 0))
+                except: pts = 0
+                try: cards = int(float(res_pt.iloc[0]['完美卡'] or 0))
+                except: cards = 0
+            
+            mc1, mc2 = st.columns(2)
+            mc1.metric("🌟 目前積點", f"{pts} 點")
+            mc2.metric("🎫 完美卡數量", f"{cards} 張")
+            st.divider()
+
+            st.subheader(f"📋 專屬待辦清單")
             todo = res[res["繳交狀態"] != "已繳交"]
-            if todo.empty: st.success("🎊 恭喜！你目前沒有任何欠交的作業喔！")
+            if todo.empty: 
+                st.success("🎊 恭喜！你目前沒有任何欠交的作業喔！")
             else:
                 for _, row in todo.iterrows():
                     ca, cb = st.columns([3, 1])
@@ -462,14 +498,36 @@ elif menu == "🛠️ 老師專屬後台":
                     st.session_state.reminder_df = pd.DataFrame(columns=["日期", "事項", "狀態"])
                     st.session_state.has_unsaved = True; st.rerun()
 
-        # ✨ 點數與完美卡管理 - 網格與展開選單設計
         with tab_points:
             st.subheader("🌟 點數與完美卡管理")
+            
+            # ✨ 新增：班級規定設定區塊 (隱藏式，避免佔用主要畫面)
+            with st.expander("⚙️ 設定自訂班級規定 (加減分快速按鈕)"):
+                rc1, rc2, rc3 = st.columns([2, 1, 1])
+                new_r_name = rc1.text_input("規定名稱", placeholder="例：上課舉手發言", key="new_rule_name")
+                new_r_pt = rc2.number_input("點數", value=1, step=1, help="加分請輸入正數，扣分請輸入負數")
+                if rc3.button("➕ 新增規定") and new_r_name:
+                    new_r = pd.DataFrame([{"規定名稱": new_r_name, "點數": str(new_r_pt)}])
+                    st.session_state.rules_df = pd.concat([st.session_state.rules_df, new_r], ignore_index=True)
+                    st.session_state.has_unsaved = True
+                    st.session_state.new_rule_name = ""
+                    st.rerun()
+                
+                if not st.session_state.rules_df.empty:
+                    st.markdown("#### 目前設定的規定：")
+                    for i, r in st.session_state.rules_df.iterrows():
+                        lc1, lc2 = st.columns([4, 1])
+                        pt_val = int(float(r['點數'] or 0))
+                        lc1.write(f"🔹 {r['規定名稱']} ({'+' if pt_val>0 else ''}{pt_val} 點)")
+                        if lc2.button("刪除", key=f"del_r_{i}"):
+                            st.session_state.rules_df = st.session_state.rules_df.drop(i).reset_index(drop=True)
+                            st.session_state.has_unsaved = True
+                            st.rerun()
+
             st.write("點選下方的學生卡片，就可以對他進行加減分操作喔！")
             
             sorted_pts = st.session_state.points_df.sort_values(by="座號", key=lambda x: pd.to_numeric(x, errors='coerce'))
             
-            # 使用 4 欄網格顯示按鈕
             grid_cols = st.columns(4)
             for idx, row in sorted_pts.iterrows():
                 sid = row["座號"]
@@ -480,10 +538,8 @@ elif menu == "🛠️ 老師專屬後台":
                 
                 with grid_cols[idx % 4]:
                     btn_text = f"{emoji} {sid}. {name}\n⭐{pt} | 🎫{card}"
-                    # 點擊按鈕，設定此學生為 active
                     st.button(btn_text, key=f"btn_stu_{sid}", on_click=set_active_student, args=(sid,), use_container_width=True)
 
-            # 如果有選擇學生，就在下方展開專屬操作面板
             if st.session_state.selected_point_sid:
                 st.divider()
                 sel_sid = st.session_state.selected_point_sid
@@ -491,7 +547,20 @@ elif menu == "🛠️ 老師專屬後台":
                 
                 st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}")
                 
-                st.markdown("#### ⚡ 快速增減積點")
+                # ✨ 新增：自訂班級規定快速按鈕
+                if not st.session_state.rules_df.empty:
+                    st.markdown("#### 📜 套用班級規定")
+                    st.markdown('<div class="btn-rule">', unsafe_allow_html=True)
+                    rule_cols = st.columns(4)
+                    for i, r in st.session_state.rules_df.iterrows():
+                        r_name = r['規定名稱']
+                        r_pt = int(float(r['點數'] or 0))
+                        btn_label = f"{r_name} ({'+' if r_pt>0 else ''}{r_pt})"
+                        with rule_cols[i % 4]:
+                            st.button(btn_label, key=f"apply_rule_{sel_sid}_{i}", on_click=modify_points, args=(sel_sid, r_pt), use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown("#### ⚡ 手動增減積點")
                 st.markdown('<div class="btn-add">', unsafe_allow_html=True)
                 a1, a2, a3, a4, a5 = st.columns(5)
                 a1.button("➕ 1", on_click=modify_points, args=(sel_sid, 1), use_container_width=True, key=f"add_1_{sel_sid}")
