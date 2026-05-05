@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-穩定防錯版", layout="wide")
+st.set_page_config(page_title="303作業登記-完美卡連動版", layout="wide")
 
 st.markdown("""
 <style>
@@ -253,14 +253,26 @@ def clean_seat_input(val_str):
         if s: res.append(force_int_str(s))
     return res
 
-def mark_fast(hw_name, status, input_key):
+# ✨ 升級版 Callback：加入 add_perfect 參數，處理「完美+1，已完成」連動
+def mark_fast(hw_name, status, input_key, add_perfect=False):
     val = st.session_state[input_key]
     if not val: return
     sids = clean_seat_input(val)
     for sid in sids:
+        # 1. 更新作業狀態
         mask = (st.session_state.main_df["作業名稱"] == hw_name) & (st.session_state.main_df["座號"].astype(str) == str(sid))
         st.session_state.main_df.loc[mask, "繳交狀態"] = status
         st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
+        
+        # 2. 如果是完美標記，自動去點數表加一張完美卡
+        if add_perfect:
+            p_mask = st.session_state.points_df['座號'].astype(str) == str(sid)
+            if p_mask.any():
+                idx = st.session_state.points_df.index[p_mask][0]
+                try: curr_card = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
+                except: curr_card = 0
+                st.session_state.points_df.at[idx, '完美卡'] = str(curr_card + 1)
+                
     st.session_state.has_unsaved = True
     st.session_state[input_key] = "" 
 
@@ -669,13 +681,7 @@ elif menu == "🛠️ 老師專屬後台":
                 card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
                 emoji = get_animal_emoji(sid)
                 
-                # ✨ 安全讀取並傳入防護網
-                stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sid)]
-                if not stu_filter.empty:
-                    is_ok, _ = get_student_status(stu_filter.iloc[0], st.session_state.main_df, sid)
-                else:
-                    is_ok, _ = True, "🟢"
-                    
+                is_ok, _ = get_student_status(row, st.session_state.main_df, sid)
                 btn_status = "🟢" if is_ok else "🔴"
                 
                 with grid_cols[idx % 4]:
@@ -686,7 +692,6 @@ elif menu == "🛠️ 老師專屬後台":
                 st.divider()
                 sel_sid = st.session_state.selected_point_sid
                 
-                # ✨ 加入防護網：先過濾資料，確認不是空的再抓取
                 stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sel_sid)]
                 
                 if not stu_filter.empty:
@@ -802,12 +807,18 @@ elif menu == "🛠️ 老師專屬後台":
             target_hw = st.session_state.selected_hw_base
             if target_hw != "請選擇":
                 st.markdown(f"### ⚡ 座號快填 - {target_hw}")
-                c1, c2 = st.columns(2)
+                # ✨ 升級版：將快速輸入框改為三個，並串接加卡片功能
+                c1, c2, c3 = st.columns(3)
+                perfect_key = f"fp_{target_hw}"
                 done_key = f"fd_{target_hw}"
                 edit_key = f"fe_{target_hw}"
                 
-                with c1: st.text_input("🟢 快速標記【已繳交】(Enter送出)", key=done_key, placeholder="例: 1,3,5", on_change=mark_fast, args=(target_hw, "已繳交", done_key))
-                with c2: st.text_input("🔴 快速標記【需訂正】(Enter送出)", key=edit_key, placeholder="例: 12", on_change=mark_fast, args=(target_hw, "需訂正", edit_key))
+                with c1: 
+                    st.text_input("🌟 完美+1，已完成", key=perfect_key, placeholder="例: 1,3,5", on_change=mark_fast, args=(target_hw, "已繳交", perfect_key, True))
+                with c2: 
+                    st.text_input("🟢 一般已繳交", key=done_key, placeholder="例: 2,4", on_change=mark_fast, args=(target_hw, "已繳交", done_key, False))
+                with c3: 
+                    st.text_input("🔴 需訂正", key=edit_key, placeholder="例: 12", on_change=mark_fast, args=(target_hw, "需訂正", edit_key, False))
 
                 st.divider()
                 
