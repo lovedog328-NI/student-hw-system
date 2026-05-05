@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-狀態管理版", layout="wide")
+st.set_page_config(page_title="303作業登記-貼紙牆版", layout="wide")
 
 st.markdown("""
 <style>
@@ -91,11 +91,14 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-free > button { background-color: #20B2AA !important; box-shadow: 0 6px 10px rgba(32, 178, 170, 0.4) !important; }
 .btn-free > button:hover { background-color: #008080 !important; }
 
+/* 為了貼紙牆特別設定的透明感按鈕 */
+.sticker-btn > button { font-size: 2rem !important; background-color: #ffffff !important; border: 2px dashed #FFB6C1 !important; color: #000 !important; box-shadow: none !important;}
+.sticker-btn > button:hover { background-color: #FFF0F5 !important; transform: scale(1.15) !important; border: 2px solid #FF69B4 !important;}
+
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
 .contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
-/* 為了容納可能較長的狀態文字，允許換行並優化字體大小 */
 [data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.0rem !important; overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
@@ -110,7 +113,13 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
     "范庭蓁", "呂佳恩", "楊晨妤", "劉芮安", "蔡芊芊", "王楷晴"
 ], 1)]
 
-ANIMAL_EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🦔", "🐸", "🐵", "🐧", "🐦", "🐥", "🦉", "🦄", "🐴", "🐢", "🐳", "🦦", "🦥"]
+ANIMAL_EMOJIS = [
+    "🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", 
+    "🦔", "🐸", "🐵", "🐧", "🐦", "🐥", "🦉", "🦄", "🐴", "🐢", "🐳", "🦦", "🦥",
+    "🐘", "🦏", "🦛", "🐊", "🐫", "🦒", "🦘", "🦡", "🐿️", "🦇", "🦭", "🐬", 
+    "🐟", "🐠", "🐡", "🦈", "🐙", "🦋", "🐛", "🐝", "🐞", "🦚", "🦜", "🦢", 
+    "🦩", "🦤", "🦖", "🦕", "🦝", "🦨", "🐕", "🐈", "🐓", "🦃"
+]
 
 def get_animal_emoji(sid):
     try:
@@ -303,13 +312,12 @@ def modify_punishment(sid, add_days):
             
         st.session_state.has_unsaved = True
 
-# ✨ 修改：加入確認鍵的 Callback
-def change_avatar(sid):
-    new_avatar = st.session_state[f"avatar_sel_{sid}"]
+# ✨ 升級版：直接傳入 emoji 作為變數，一鍵變更頭像
+def set_new_avatar(sid, emoji):
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
-        st.session_state.points_df.at[idx, '頭像'] = str(new_avatar)
+        st.session_state.points_df.at[idx, '頭像'] = str(emoji)
         st.session_state.has_unsaved = True
 
 def set_active_student(sid):
@@ -352,9 +360,7 @@ def add_custom_rule():
 def update_rem_range():
     st.session_state.remind_range_val = st.session_state.temp_range
 
-# ✨ 升級版狀態計算：精細區分「未繳交」與「需訂正」
 def get_student_status(pt_row, main_df, sid):
-    # 1. 檢查懲罰狀態
     end_str = pt_row.get('懲罰結束日期', "")
     is_punished = False
     punish_text = ""
@@ -368,12 +374,10 @@ def get_student_status(pt_row, main_df, sid):
     except:
         pass
     
-    # 2. 檢查作業缺交與訂正狀態
     hw_df = main_df[main_df["座號"].astype(str) == str(sid)]
     not_sub_count = len(hw_df[hw_df["繳交狀態"] == "未繳交"])
     need_fix_count = len(hw_df[hw_df["繳交狀態"] == "需訂正"])
     
-    # 3. 組合狀態文字
     status_parts = []
     if is_punished:
         status_parts.append(punish_text)
@@ -513,23 +517,20 @@ elif menu == "🔍 個人作業查詢":
             stu_name = res.iloc[0]['姓名']
             st.markdown(f"### 👤 {stu_name} 的專屬空間")
             
+            # ✨ 新增：貼紙牆取代下拉選單
             curr_avatar = get_animal_emoji(clean_sid)
-            c_img, c_sel = st.columns([1, 4])
-            with c_img:
-                st.markdown(f"<div style='font-size: 4rem; text-align: center; margin-top: -10px;'>{curr_avatar}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div style='font-size: 6rem; text-align: center; margin-bottom: 20px;'>{curr_avatar}</div>", unsafe_allow_html=True)
             
-            # ✨ 新增：加入「確認更換」按鈕
-            with c_sel:
-                try: curr_idx = ANIMAL_EMOJIS.index(curr_avatar)
-                except: curr_idx = 0
+            with st.expander("🐾 點擊這裡打開貼紙簿，選擇新頭像！"):
+                st.markdown('<div class="sticker-btn">', unsafe_allow_html=True)
                 
-                sc1, sc2 = st.columns([2, 1])
-                with sc1:
-                    # 移除 on_change，改由按鈕觸發
-                    st.selectbox("🐾 挑選小動物：", ANIMAL_EMOJIS, index=curr_idx, key=f"avatar_sel_{clean_sid}")
-                with sc2:
-                    st.markdown("<br>", unsafe_allow_html=True)
-                    st.button("✅ 確認更換", key=f"btn_avatar_{clean_sid}", on_click=change_avatar, args=(clean_sid,), use_container_width=True)
+                # 建立 8 欄網格顯示所有小動物貼紙
+                emoji_cols = st.columns(8)
+                for i, emo in enumerate(ANIMAL_EMOJIS):
+                    with emoji_cols[i % 8]:
+                        st.button(emo, key=f"set_emo_{clean_sid}_{i}", on_click=set_new_avatar, args=(clean_sid, emo), use_container_width=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
             
             st.divider()
             
