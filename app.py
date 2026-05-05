@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-貼紙牆版", layout="wide")
+st.set_page_config(page_title="303作業登記-穩定防錯版", layout="wide")
 
 st.markdown("""
 <style>
@@ -91,14 +91,27 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-free > button { background-color: #20B2AA !important; box-shadow: 0 6px 10px rgba(32, 178, 170, 0.4) !important; }
 .btn-free > button:hover { background-color: #008080 !important; }
 
-/* 為了貼紙牆特別設定的透明感按鈕 */
-.sticker-btn > button { font-size: 2rem !important; background-color: #ffffff !important; border: 2px dashed #FFB6C1 !important; color: #000 !important; box-shadow: none !important;}
-.sticker-btn > button:hover { background-color: #FFF0F5 !important; transform: scale(1.15) !important; border: 2px solid #FF69B4 !important;}
+/* ✨ 升級：為了貼紙牆特別設定的透明感大按鈕 */
+.sticker-btn > button { 
+    font-size: 3.5rem !important; 
+    padding: 15px 0 !important;   
+    background-color: #ffffff !important; 
+    border: 2px dashed #FFB6C1 !important; 
+    color: #000 !important; 
+    box-shadow: none !important;
+}
+.sticker-btn > button:hover { 
+    background-color: #FFF0F5 !important; 
+    transform: scale(1.1) !important; 
+    border: 2px solid #FF69B4 !important;
+    z-index: 1; 
+}
 
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
 .contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
+/* 為了容納可能較長的狀態文字，允許換行並優化字體大小 */
 [data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.0rem !important; overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
@@ -312,7 +325,6 @@ def modify_punishment(sid, add_days):
             
         st.session_state.has_unsaved = True
 
-# ✨ 升級版：直接傳入 emoji 作為變數，一鍵變更頭像
 def set_new_avatar(sid, emoji):
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
@@ -517,19 +529,15 @@ elif menu == "🔍 個人作業查詢":
             stu_name = res.iloc[0]['姓名']
             st.markdown(f"### 👤 {stu_name} 的專屬空間")
             
-            # ✨ 新增：貼紙牆取代下拉選單
             curr_avatar = get_animal_emoji(clean_sid)
             st.markdown(f"<div style='font-size: 6rem; text-align: center; margin-bottom: 20px;'>{curr_avatar}</div>", unsafe_allow_html=True)
             
             with st.expander("🐾 點擊這裡打開貼紙簿，選擇新頭像！"):
                 st.markdown('<div class="sticker-btn">', unsafe_allow_html=True)
-                
-                # 建立 8 欄網格顯示所有小動物貼紙
-                emoji_cols = st.columns(8)
+                emoji_cols = st.columns(5)
                 for i, emo in enumerate(ANIMAL_EMOJIS):
-                    with emoji_cols[i % 8]:
+                    with emoji_cols[i % 5]:
                         st.button(emo, key=f"set_emo_{clean_sid}_{i}", on_click=set_new_avatar, args=(clean_sid, emo), use_container_width=True)
-                
                 st.markdown('</div>', unsafe_allow_html=True)
             
             st.divider()
@@ -661,7 +669,13 @@ elif menu == "🛠️ 老師專屬後台":
                 card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
                 emoji = get_animal_emoji(sid)
                 
-                is_ok, _ = get_student_status(row, st.session_state.main_df, sid)
+                # ✨ 安全讀取並傳入防護網
+                stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sid)]
+                if not stu_filter.empty:
+                    is_ok, _ = get_student_status(stu_filter.iloc[0], st.session_state.main_df, sid)
+                else:
+                    is_ok, _ = True, "🟢"
+                    
                 btn_status = "🟢" if is_ok else "🔴"
                 
                 with grid_cols[idx % 4]:
@@ -671,66 +685,75 @@ elif menu == "🛠️ 老師專屬後台":
             if st.session_state.selected_point_sid:
                 st.divider()
                 sel_sid = st.session_state.selected_point_sid
-                sel_row = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sel_sid)].iloc[0]
                 
-                is_ok, status_text = get_student_status(sel_row, st.session_state.main_df, sel_sid)
+                # ✨ 加入防護網：先過濾資料，確認不是空的再抓取
+                stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sel_sid)]
                 
-                st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_text}")
-                
-                if not st.session_state.rules_df.empty:
-                    st.markdown("#### 📜 套用班級規定")
-                    st.markdown('<div class="btn-rule">', unsafe_allow_html=True)
-                    rule_cols = st.columns(4)
-                    for i, r in st.session_state.rules_df.iterrows():
-                        r_name = r['規定名稱']
-                        r_pt = int(float(r['點數'] or 0))
-                        btn_label = f"{r_name} ({'+' if r_pt>0 else ''}{r_pt})"
-                        with rule_cols[i % 4]:
-                            st.button(btn_label, key=f"apply_rule_{sel_sid}_{i}", on_click=modify_points, args=(sel_sid, r_pt), use_container_width=True)
+                if not stu_filter.empty:
+                    sel_row = stu_filter.iloc[0]
+                    is_ok, status_text = get_student_status(sel_row, st.session_state.main_df, sel_sid)
+                    
+                    st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_text}")
+                    
+                    if not st.session_state.rules_df.empty:
+                        st.markdown("#### 📜 套用班級規定")
+                        st.markdown('<div class="btn-rule">', unsafe_allow_html=True)
+                        rule_cols = st.columns(4)
+                        for i, r in st.session_state.rules_df.iterrows():
+                            r_name = r['規定名稱']
+                            r_pt = int(float(r['點數'] or 0))
+                            btn_label = f"{r_name} ({'+' if r_pt>0 else ''}{r_pt})"
+                            with rule_cols[i % 4]:
+                                st.button(btn_label, key=f"apply_rule_{sel_sid}_{i}", on_click=modify_points, args=(sel_sid, r_pt), use_container_width=True)
+                        st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    st.markdown("#### ⚡ 手動增減積點")
+                    st.markdown('<div class="btn-add">', unsafe_allow_html=True)
+                    a1, a2, a3, a4, a5 = st.columns(5)
+                    a1.button("➕ 1", on_click=modify_points, args=(sel_sid, 1), use_container_width=True, key=f"add_1_{sel_sid}")
+                    a2.button("➕ 5", on_click=modify_points, args=(sel_sid, 5), use_container_width=True, key=f"add_5_{sel_sid}")
+                    a3.button("➕ 10", on_click=modify_points, args=(sel_sid, 10), use_container_width=True, key=f"add_10_{sel_sid}")
+                    a4.button("➕ 50", on_click=modify_points, args=(sel_sid, 50), use_container_width=True, key=f"add_50_{sel_sid}")
+                    a5.button("➕ 100", on_click=modify_points, args=(sel_sid, 100), use_container_width=True, key=f"add_100_{sel_sid}")
                     st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.markdown("#### ⚡ 手動增減積點")
-                st.markdown('<div class="btn-add">', unsafe_allow_html=True)
-                a1, a2, a3, a4, a5 = st.columns(5)
-                a1.button("➕ 1", on_click=modify_points, args=(sel_sid, 1), use_container_width=True, key=f"add_1_{sel_sid}")
-                a2.button("➕ 5", on_click=modify_points, args=(sel_sid, 5), use_container_width=True, key=f"add_5_{sel_sid}")
-                a3.button("➕ 10", on_click=modify_points, args=(sel_sid, 10), use_container_width=True, key=f"add_10_{sel_sid}")
-                a4.button("➕ 50", on_click=modify_points, args=(sel_sid, 50), use_container_width=True, key=f"add_50_{sel_sid}")
-                a5.button("➕ 100", on_click=modify_points, args=(sel_sid, 100), use_container_width=True, key=f"add_100_{sel_sid}")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.markdown('<div class="btn-sub">', unsafe_allow_html=True)
-                s1, s2, s3, s4, s5 = st.columns(5)
-                s1.button("➖ 1", on_click=modify_points, args=(sel_sid, -1), use_container_width=True, key=f"sub_1_{sel_sid}")
-                s2.button("➖ 5", on_click=modify_points, args=(sel_sid, -5), use_container_width=True, key=f"sub_5_{sel_sid}")
-                s3.button("➖ 10", on_click=modify_points, args=(sel_sid, -10), use_container_width=True, key=f"sub_10_{sel_sid}")
-                s4.button("➖ 50", on_click=modify_points, args=(sel_sid, -50), use_container_width=True, key=f"sub_50_{sel_sid}")
-                s5.button("➖ 100", on_click=modify_points, args=(sel_sid, -100), use_container_width=True, key=f"sub_100_{sel_sid}")
-                st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    st.markdown('<div class="btn-sub">', unsafe_allow_html=True)
+                    s1, s2, s3, s4, s5 = st.columns(5)
+                    s1.button("➖ 1", on_click=modify_points, args=(sel_sid, -1), use_container_width=True, key=f"sub_1_{sel_sid}")
+                    s2.button("➖ 5", on_click=modify_points, args=(sel_sid, -5), use_container_width=True, key=f"sub_5_{sel_sid}")
+                    s3.button("➖ 10", on_click=modify_points, args=(sel_sid, -10), use_container_width=True, key=f"sub_10_{sel_sid}")
+                    s4.button("➖ 50", on_click=modify_points, args=(sel_sid, -50), use_container_width=True, key=f"sub_50_{sel_sid}")
+                    s5.button("➖ 100", on_click=modify_points, args=(sel_sid, -100), use_container_width=True, key=f"sub_100_{sel_sid}")
+                    st.markdown('</div>', unsafe_allow_html=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
-                
-                st.markdown("#### 🎫 完美卡管理")
-                st.markdown('<div class="btn-card">', unsafe_allow_html=True)
-                c1, c2 = st.columns(2)
-                c1.button("➕ 獲得 1 張完美卡", on_click=modify_perfect_card, args=(sel_sid, 1), use_container_width=True, key=f"card_add_{sel_sid}")
-                c2.button("➖ 扣除次數 (兌換使用)", on_click=modify_perfect_card, args=(sel_sid, -1), use_container_width=True, key=f"card_sub_{sel_sid}")
-                st.markdown('</div>', unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    st.markdown("#### 🎫 完美卡管理")
+                    st.markdown('<div class="btn-card">', unsafe_allow_html=True)
+                    c1, c2 = st.columns(2)
+                    c1.button("➕ 獲得 1 張完美卡", on_click=modify_perfect_card, args=(sel_sid, 1), use_container_width=True, key=f"card_add_{sel_sid}")
+                    c2.button("➖ 扣除次數 (兌換使用)", on_click=modify_perfect_card, args=(sel_sid, -1), use_container_width=True, key=f"card_sub_{sel_sid}")
+                    st.markdown('</div>', unsafe_allow_html=True)
 
-                st.markdown("<br>", unsafe_allow_html=True)
+                    st.markdown("<br>", unsafe_allow_html=True)
 
-                st.markdown("#### 🛑 狀態與懲罰管理")
-                st.markdown('<div class="btn-punish">', unsafe_allow_html=True)
-                p1, p2, p3 = st.columns(3)
-                p1.button("➕ 罰 1 天不能下課", on_click=modify_punishment, args=(sel_sid, 1), use_container_width=True, key=f"punish_1_{sel_sid}")
-                p2.button("➕ 罰 3 天不能下課", on_click=modify_punishment, args=(sel_sid, 3), use_container_width=True, key=f"punish_3_{sel_sid}")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.markdown('<div class="btn-free">', unsafe_allow_html=True)
-                p3.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                st.info("💡 操作完畢後，您可以點擊上方其他學生繼續修改，或是點選同一位學生來收起此面板。")
+                    st.markdown("#### 🛑 狀態與懲罰管理")
+                    st.markdown('<div class="btn-punish">', unsafe_allow_html=True)
+                    p1, p2, p3 = st.columns(3)
+                    p1.button("➕ 罰 1 天不能下課", on_click=modify_punishment, args=(sel_sid, 1), use_container_width=True, key=f"punish_1_{sel_sid}")
+                    p2.button("➕ 罰 3 天不能下課", on_click=modify_punishment, args=(sel_sid, 3), use_container_width=True, key=f"punish_3_{sel_sid}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    st.markdown('<div class="btn-free">', unsafe_allow_html=True)
+                    p3.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
+                    st.markdown('</div>', unsafe_allow_html=True)
+                    
+                    st.info("💡 操作完畢後，您可以點擊上方其他學生繼續修改，或是點選同一位學生來收起此面板。")
+                else:
+                    st.warning("⚠️ 哎呀！系統暫時找不到這位學生的資料。這可能是因為資料剛剛有更新。")
+                    if st.button("🔄 點我重新整理"):
+                        st.session_state.selected_point_sid = None
+                        st.rerun()
             
             st.divider()
             with st.expander("⚠️ 危險操作區"):
