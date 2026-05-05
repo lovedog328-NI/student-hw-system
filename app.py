@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-頭像修復版", layout="wide")
+st.set_page_config(page_title="303作業登記-狀態管理版", layout="wide")
 
 st.markdown("""
 <style>
@@ -95,8 +95,9 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
 .contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
-[data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.8rem !important; overflow: visible !important; white-space: nowrap !important; }
-[data-testid="stMetricValue"] > div { overflow: visible !important; white-space: nowrap !important; }
+/* 為了容納可能較長的狀態文字，允許換行並優化字體大小 */
+[data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.0rem !important; overflow: visible !important; white-space: normal !important; }
+[data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -111,7 +112,6 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
 
 ANIMAL_EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🦔", "🐸", "🐵", "🐧", "🐦", "🐥", "🦉", "🦄", "🐴", "🐢", "🐳", "🦦", "🦥"]
 
-# ✨ 升級版：使用 .astype(str) 強制轉換比對，解決型態不一致問題
 def get_animal_emoji(sid):
     try:
         if 'points_df' in st.session_state and not st.session_state.points_df.empty:
@@ -163,7 +163,6 @@ def load_data(sheet_name="Sheet1"):
         if not df.empty:
             df = df[~(df[expected_cols] == "").all(axis=1)]
         
-        # ✨ 強化讀取：只要有座號欄位，全部強制轉為字串
         if not df.empty and "座號" in df.columns:
             df["座號"] = df["座號"].apply(force_int_str)
 
@@ -304,7 +303,7 @@ def modify_punishment(sid, add_days):
             
         st.session_state.has_unsaved = True
 
-# ✨ 修改：加入強制字串比對，徹底解決找不到學生的問題
+# ✨ 修改：加入確認鍵的 Callback
 def change_avatar(sid):
     new_avatar = st.session_state[f"avatar_sel_{sid}"]
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
@@ -353,7 +352,9 @@ def add_custom_rule():
 def update_rem_range():
     st.session_state.remind_range_val = st.session_state.temp_range
 
+# ✨ 升級版狀態計算：精細區分「未繳交」與「需訂正」
 def get_student_status(pt_row, main_df, sid):
+    # 1. 檢查懲罰狀態
     end_str = pt_row.get('懲罰結束日期', "")
     is_punished = False
     punish_text = ""
@@ -363,22 +364,28 @@ def get_student_status(pt_row, main_df, sid):
         if end_date >= today:
             days_left = (end_date - today).days + 1
             is_punished = True
-            punish_text = f"🛑 罰 {days_left} 天"
+            punish_text = f"🛑罰{days_left}天"
     except:
         pass
     
+    # 2. 檢查作業缺交與訂正狀態
     hw_df = main_df[main_df["座號"].astype(str) == str(sid)]
-    missing_hw = hw_df[hw_df["繳交狀態"] != "已繳交"]
-    hw_missing_count = len(missing_hw)
+    not_sub_count = len(hw_df[hw_df["繳交狀態"] == "未繳交"])
+    need_fix_count = len(hw_df[hw_df["繳交狀態"] == "需訂正"])
     
-    if is_punished and hw_missing_count > 0:
-        return False, f"{punish_text} & 欠 {hw_missing_count} 項作業"
-    elif is_punished:
-        return False, f"{punish_text}"
-    elif hw_missing_count > 0:
-        return False, f"🔴 欠 {hw_missing_count} 項作業"
-    else:
+    # 3. 組合狀態文字
+    status_parts = []
+    if is_punished:
+        status_parts.append(punish_text)
+    if not_sub_count > 0:
+        status_parts.append(f"🔴未交{not_sub_count}")
+    if need_fix_count > 0:
+        status_parts.append(f"🟠訂正{need_fix_count}")
+        
+    if not status_parts:
         return True, "🟢 可以下課"
+    else:
+        return False, " | ".join(status_parts)
 
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
@@ -510,10 +517,19 @@ elif menu == "🔍 個人作業查詢":
             c_img, c_sel = st.columns([1, 4])
             with c_img:
                 st.markdown(f"<div style='font-size: 4rem; text-align: center; margin-top: -10px;'>{curr_avatar}</div>", unsafe_allow_html=True)
+            
+            # ✨ 新增：加入「確認更換」按鈕
             with c_sel:
                 try: curr_idx = ANIMAL_EMOJIS.index(curr_avatar)
                 except: curr_idx = 0
-                st.selectbox("🐾 換一個喜歡的小動物：", ANIMAL_EMOJIS, index=curr_idx, key=f"avatar_sel_{clean_sid}", on_change=change_avatar, args=(clean_sid,))
+                
+                sc1, sc2 = st.columns([2, 1])
+                with sc1:
+                    # 移除 on_change，改由按鈕觸發
+                    st.selectbox("🐾 挑選小動物：", ANIMAL_EMOJIS, index=curr_idx, key=f"avatar_sel_{clean_sid}")
+                with sc2:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    st.button("✅ 確認更換", key=f"btn_avatar_{clean_sid}", on_click=change_avatar, args=(clean_sid,), use_container_width=True)
             
             st.divider()
             
