@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-防呆完美版", layout="wide")
+st.set_page_config(page_title="303作業登記-全班擴充版", layout="wide")
 
 st.markdown("""
 <style>
@@ -406,7 +406,6 @@ def get_student_status(pt_row, main_df, sid):
         if end_date >= today:
             days_left = (end_date - today).days + 1
             is_punished = True
-            # ✨ 修改：更新顯示文字為「罰 X 天禁下課」
             punish_text = f"🛑罰{days_left}天禁下課"
     except:
         pass
@@ -657,13 +656,30 @@ elif menu == "🛠️ 老師專屬後台":
         with tab_points:
             st.subheader("🌟 點數與完美卡管理")
             
+            # ✨ 新增：展開全班快速加減分
             with st.expander("📣 全班統一加減分 (一鍵套用全班)"):
                 st.markdown('<div class="btn-all">', unsafe_allow_html=True)
-                ca1, ca2, ca3, ca4 = st.columns(4)
-                ca1.button("🚀 全班 ➕ 1 點", on_click=modify_all_points, args=(1,), use_container_width=True, key="all_add_1")
-                ca2.button("🚀 全班 ➕ 5 點", on_click=modify_all_points, args=(5,), use_container_width=True, key="all_add_5")
-                ca3.button("🌧️ 全班 ➖ 1 點", on_click=modify_all_points, args=(-1,), use_container_width=True, key="all_sub_1")
-                ca4.button("🌧️ 全班 ➖ 5 點", on_click=modify_all_points, args=(-5,), use_container_width=True, key="all_sub_5")
+                
+                st.markdown('**✨ 全班快速加分**')
+                st.markdown('<div class="btn-add">', unsafe_allow_html=True)
+                ca1, ca2, ca3, ca4, ca5 = st.columns(5)
+                ca1.button("➕ 1", on_click=modify_all_points, args=(1,), use_container_width=True, key="all_add_1")
+                ca2.button("➕ 5", on_click=modify_all_points, args=(5,), use_container_width=True, key="all_add_5")
+                ca3.button("➕ 10", on_click=modify_all_points, args=(10,), use_container_width=True, key="all_add_10")
+                ca4.button("➕ 50", on_click=modify_all_points, args=(50,), use_container_width=True, key="all_add_50")
+                ca5.button("➕ 100", on_click=modify_all_points, args=(100,), use_container_width=True, key="all_add_100")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
+                st.markdown('**🌧️ 全班快速扣分**')
+                st.markdown('<div class="btn-sub">', unsafe_allow_html=True)
+                cs1, cs2, cs3, cs4, cs5 = st.columns(5)
+                cs1.button("➖ 1", on_click=modify_all_points, args=(-1,), use_container_width=True, key="all_sub_1")
+                cs2.button("➖ 5", on_click=modify_all_points, args=(-5,), use_container_width=True, key="all_sub_5")
+                cs3.button("➖ 10", on_click=modify_all_points, args=(-10,), use_container_width=True, key="all_sub_10")
+                cs4.button("➖ 50", on_click=modify_all_points, args=(-50,), use_container_width=True, key="all_sub_50")
+                cs5.button("➖ 100", on_click=modify_all_points, args=(-100,), use_container_width=True, key="all_sub_100")
+                st.markdown('</div>', unsafe_allow_html=True)
+                
                 st.markdown('</div>', unsafe_allow_html=True)
 
             with st.expander("⚙️ 設定自訂班級規定 (加減分快速按鈕)"):
@@ -772,7 +788,7 @@ elif menu == "🛠️ 老師專屬後台":
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     st.markdown('<div class="btn-free">', unsafe_allow_html=True)
-                    st.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
+                    p3.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     st.info("💡 操作完畢後，您可以點擊上方其他學生繼續修改，或是點選同一位學生來收起此面板。")
