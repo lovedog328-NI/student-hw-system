@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-全班擴充版", layout="wide")
+st.set_page_config(page_title="303作業登記-整數防呆版", layout="wide")
 
 st.markdown("""
 <style>
@@ -483,8 +483,11 @@ if menu == "📖 班級榮譽榜":
     for idx, row in sorted_pts.iterrows():
         sid = row["座號"]
         name = row["姓名"]
-        pt = row["總積點"] if str(row["總積點"]).strip() != "" else "0"
-        card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
+        # ✨ 確保顯示的積點與卡片都是整數
+        try: pt = int(float(row["總積點"]))
+        except: pt = 0
+        try: card = int(float(row.get("完美卡", 0)))
+        except: card = 0
         emoji = get_animal_emoji(sid)
         
         is_ok, status_text = get_student_status(row, st.session_state.main_df, sid)
@@ -571,9 +574,10 @@ elif menu == "🔍 個人作業查詢":
             pts, cards = 0, 0
             is_ok, status_text = True, "🟢 可以下課"
             if not res_pt.empty:
-                try: pts = int(float(res_pt.iloc[0]['總積點'] or 0))
+                # ✨ 確保為整數
+                try: pts = int(float(res_pt.iloc[0]['總積點']))
                 except: pts = 0
-                try: cards = int(float(res_pt.iloc[0]['完美卡'] or 0))
+                try: cards = int(float(res_pt.iloc[0]['完美卡']))
                 except: cards = 0
                 
                 is_ok, status_text = get_student_status(res_pt.iloc[0], st.session_state.main_df, clean_sid)
@@ -656,7 +660,6 @@ elif menu == "🛠️ 老師專屬後台":
         with tab_points:
             st.subheader("🌟 點數與完美卡管理")
             
-            # ✨ 新增：展開全班快速加減分
             with st.expander("📣 全班統一加減分 (一鍵套用全班)"):
                 st.markdown('<div class="btn-all">', unsafe_allow_html=True)
                 
@@ -709,8 +712,11 @@ elif menu == "🛠️ 老師專屬後台":
             for idx, row in sorted_pts.iterrows():
                 sid = row["座號"]
                 name = row["姓名"]
-                pt = row["總積點"] if str(row["總積點"]).strip() != "" else "0"
-                card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
+                # ✨ 在老師後台的按鈕上也確保顯示整數
+                try: pt = int(float(row["總積點"]))
+                except: pt = 0
+                try: card = int(float(row.get("完美卡", 0)))
+                except: card = 0
                 emoji = get_animal_emoji(sid)
                 
                 stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sid)]
@@ -788,7 +794,7 @@ elif menu == "🛠️ 老師專屬後台":
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     st.markdown('<div class="btn-free">', unsafe_allow_html=True)
-                    p3.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
+                    st.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     st.info("💡 操作完畢後，您可以點擊上方其他學生繼續修改，或是點選同一位學生來收起此面板。")
