@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-完美卡連動版", layout="wide")
+st.set_page_config(page_title="303作業登記-型態防護版", layout="wide")
 
 st.markdown("""
 <style>
@@ -181,7 +181,11 @@ def load_data(sheet_name="Sheet1"):
         else:
             for col in expected_cols:
                 if col not in df.columns: df[col] = ""
+        
         df = df.fillna("")
+        # ✨ 防護裝甲：強制所有讀取的資料都是文字，避免 Pandas TypeError
+        df = df.astype(str).replace('nan', '')
+        
         if not df.empty:
             df = df[~(df[expected_cols] == "").all(axis=1)]
         
@@ -231,7 +235,8 @@ if 'points_df' not in st.session_state:
         if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
         if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
         if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
-    st.session_state.points_df = temp_pdf
+    # ✨ 再次套用防護裝甲，確保都是文字
+    st.session_state.points_df = temp_pdf.astype(str)
 
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
@@ -253,7 +258,6 @@ def clean_seat_input(val_str):
         if s: res.append(force_int_str(s))
     return res
 
-# ✨ 升級版 Callback：加入 add_perfect 參數，處理「完美+1，已完成」連動
 def mark_fast(hw_name, status, input_key, add_perfect=False):
     val = st.session_state[input_key]
     if not val: return
@@ -454,7 +458,7 @@ if st.sidebar.button("🔄 重新載入最新資料"):
         if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
         if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
         if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
-    st.session_state.points_df = temp_pdf
+    st.session_state.points_df = temp_pdf.astype(str)
     
     st.session_state.has_unsaved = False
     st.rerun()
@@ -807,7 +811,6 @@ elif menu == "🛠️ 老師專屬後台":
             target_hw = st.session_state.selected_hw_base
             if target_hw != "請選擇":
                 st.markdown(f"### ⚡ 座號快填 - {target_hw}")
-                # ✨ 升級版：將快速輸入框改為三個，並串接加卡片功能
                 c1, c2, c3 = st.columns(3)
                 perfect_key = f"fp_{target_hw}"
                 done_key = f"fd_{target_hw}"
