@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-終極防錯版", layout="wide")
+st.set_page_config(page_title="303作業登記-防呆完美版", layout="wide")
 
 st.markdown("""
 <style>
@@ -84,8 +84,6 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-rule > button:hover { background-color: #6A5ACD !important; }
 .btn-all > button { background-color: #3CB371 !important; box-shadow: 0 6px 10px rgba(60, 179, 113, 0.4) !important; }
 .btn-all > button:hover { background-color: #2E8B57 !important; }
-
-/* 懲罰按鈕專屬 */
 .btn-punish > button { background-color: #696969 !important; box-shadow: 0 6px 10px rgba(105, 105, 105, 0.4) !important; }
 .btn-punish > button:hover { background-color: #2F4F4F !important; }
 .btn-free > button { background-color: #20B2AA !important; box-shadow: 0 6px 10px rgba(32, 178, 170, 0.4) !important; }
@@ -146,8 +144,9 @@ def get_animal_emoji(sid):
     except:
         return "🐾"
 
+# ✨ 防呆升級：作業表新增「已給完美卡」紀錄欄位
 SHEET_COLUMNS = {
-    "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期"],
+    "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期", "已給完美卡"],
     "Salary": ["日期", "項目", "金額"],
     "Reminders": ["日期", "事項", "狀態"],
     "ContactBook": ["日期", "內容"],
@@ -255,27 +254,38 @@ def clean_seat_input(val_str):
         if s: res.append(force_int_str(s))
     return res
 
-# ✨ 終極防禦：加入寫入前強制轉型，徹底消滅 TypeError
+# ✨ 防呆完美卡：檢查是否給過
 def mark_fast(hw_name, status, input_key, add_perfect=False):
     val = st.session_state[input_key]
     if not val: return
     sids = clean_seat_input(val)
     for sid in sids:
+        # 找出該名學生該項作業的那一筆資料
         mask = (st.session_state.main_df["作業名稱"] == hw_name) & (st.session_state.main_df["座號"].astype(str) == str(sid))
-        st.session_state.main_df.loc[mask, "繳交狀態"] = status
-        st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
         
         if add_perfect:
-            p_mask = st.session_state.points_df['座號'].astype(str) == str(sid)
-            if p_mask.any():
-                idx = st.session_state.points_df.index[p_mask][0]
+            # 檢查這項作業是不是已經給過完美卡了
+            try:
+                already_given = st.session_state.main_df.loc[mask, "已給完美卡"].values[0] == "是"
+            except:
+                already_given = False
+
+            # 只有在「還沒給過」的情況下，才加分
+            if not already_given:
+                p_mask = st.session_state.points_df['座號'].astype(str) == str(sid)
+                if p_mask.any():
+                    idx = st.session_state.points_df.index[p_mask][0]
+                    st.session_state.points_df['完美卡'] = st.session_state.points_df['完美卡'].astype(str)
+                    try: curr_card = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
+                    except: curr_card = 0
+                    st.session_state.points_df.at[idx, '完美卡'] = str(curr_card + 1)
                 
-                # 🛡️ 寫入前強制將該欄轉為文字型態
-                st.session_state.points_df['完美卡'] = st.session_state.points_df['完美卡'].astype(str)
-                
-                try: curr_card = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
-                except: curr_card = 0
-                st.session_state.points_df.at[idx, '完美卡'] = str(curr_card + 1)
+                # 標記為已給，防呆機制啟動
+                st.session_state.main_df.loc[mask, "已給完美卡"] = "是"
+
+        # 不管有沒有加分，都會更新作業狀態
+        st.session_state.main_df.loc[mask, "繳交狀態"] = status
+        st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
                 
     st.session_state.has_unsaved = True
     st.session_state[input_key] = "" 
@@ -374,7 +384,8 @@ def add_reminder():
 def add_homework():
     nhw = st.session_state.new_hw_input.strip()
     if not nhw: return
-    new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today())} for s in STUDENT_LIST]
+    # ✨ 新增作業時，預設未給過完美卡
+    new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today()), "已給完美卡": ""} for s in STUDENT_LIST]
     st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
     st.session_state.has_unsaved = True
     st.session_state.new_hw_input = "" 
@@ -691,7 +702,12 @@ elif menu == "🛠️ 老師專屬後台":
                 card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
                 emoji = get_animal_emoji(sid)
                 
-                is_ok, _ = get_student_status(row, st.session_state.main_df, sid)
+                stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sid)]
+                if not stu_filter.empty:
+                    is_ok, _ = get_student_status(stu_filter.iloc[0], st.session_state.main_df, sid)
+                else:
+                    is_ok, _ = True, "🟢"
+                    
                 btn_status = "🟢" if is_ok else "🔴"
                 
                 with grid_cols[idx % 4]:
@@ -708,8 +724,7 @@ elif menu == "🛠️ 老師專屬後台":
                     sel_row = stu_filter.iloc[0]
                     is_ok, status_text = get_student_status(sel_row, st.session_state.main_df, sel_sid)
                     
-                    status_disp = status_text.replace('\n', ' | ')
-                    st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_disp}")
+                    st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_text.replace('\n', ' | ')}")
                     
                     if not st.session_state.rules_df.empty:
                         st.markdown("#### 📜 套用班級規定")
