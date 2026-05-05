@@ -84,6 +84,8 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-rule > button:hover { background-color: #6A5ACD !important; }
 .btn-all > button { background-color: #3CB371 !important; box-shadow: 0 6px 10px rgba(60, 179, 113, 0.4) !important; }
 .btn-all > button:hover { background-color: #2E8B57 !important; }
+
+/* 懲罰按鈕專屬 */
 .btn-punish > button { background-color: #696969 !important; box-shadow: 0 6px 10px rgba(105, 105, 105, 0.4) !important; }
 .btn-punish > button:hover { background-color: #2F4F4F !important; }
 .btn-free > button { background-color: #20B2AA !important; box-shadow: 0 6px 10px rgba(32, 178, 170, 0.4) !important; }
@@ -144,7 +146,6 @@ def get_animal_emoji(sid):
     except:
         return "🐾"
 
-# ✨ 防呆升級：作業表新增「已給完美卡」紀錄欄位
 SHEET_COLUMNS = {
     "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期", "已給完美卡"],
     "Salary": ["日期", "項目", "金額"],
@@ -254,23 +255,19 @@ def clean_seat_input(val_str):
         if s: res.append(force_int_str(s))
     return res
 
-# ✨ 防呆完美卡：檢查是否給過
 def mark_fast(hw_name, status, input_key, add_perfect=False):
     val = st.session_state[input_key]
     if not val: return
     sids = clean_seat_input(val)
     for sid in sids:
-        # 找出該名學生該項作業的那一筆資料
         mask = (st.session_state.main_df["作業名稱"] == hw_name) & (st.session_state.main_df["座號"].astype(str) == str(sid))
         
         if add_perfect:
-            # 檢查這項作業是不是已經給過完美卡了
             try:
                 already_given = st.session_state.main_df.loc[mask, "已給完美卡"].values[0] == "是"
             except:
                 already_given = False
 
-            # 只有在「還沒給過」的情況下，才加分
             if not already_given:
                 p_mask = st.session_state.points_df['座號'].astype(str) == str(sid)
                 if p_mask.any():
@@ -280,10 +277,8 @@ def mark_fast(hw_name, status, input_key, add_perfect=False):
                     except: curr_card = 0
                     st.session_state.points_df.at[idx, '完美卡'] = str(curr_card + 1)
                 
-                # 標記為已給，防呆機制啟動
                 st.session_state.main_df.loc[mask, "已給完美卡"] = "是"
 
-        # 不管有沒有加分，都會更新作業狀態
         st.session_state.main_df.loc[mask, "繳交狀態"] = status
         st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
                 
@@ -384,7 +379,6 @@ def add_reminder():
 def add_homework():
     nhw = st.session_state.new_hw_input.strip()
     if not nhw: return
-    # ✨ 新增作業時，預設未給過完美卡
     new_rows = [{"座號": s['座號'], "姓名": s['姓名'], "作業名稱": nhw, "繳交狀態": "未繳交", "成績": "", "更新日期": str(date.today()), "已給完美卡": ""} for s in STUDENT_LIST]
     st.session_state.main_df = pd.concat([st.session_state.main_df, pd.DataFrame(new_rows)], ignore_index=True)
     st.session_state.has_unsaved = True
@@ -412,7 +406,8 @@ def get_student_status(pt_row, main_df, sid):
         if end_date >= today:
             days_left = (end_date - today).days + 1
             is_punished = True
-            punish_text = f"🛑罰{days_left}天"
+            # ✨ 修改：更新顯示文字為「罰 X 天禁下課」
+            punish_text = f"🛑罰{days_left}天禁下課"
     except:
         pass
     
@@ -771,12 +766,13 @@ elif menu == "🛠️ 老師專屬後台":
                     st.markdown("#### 🛑 狀態與懲罰管理")
                     st.markdown('<div class="btn-punish">', unsafe_allow_html=True)
                     p1, p2, p3 = st.columns(3)
-                    p1.button("➕ 罰 1 天不能下課", on_click=modify_punishment, args=(sel_sid, 1), use_container_width=True, key=f"punish_1_{sel_sid}")
-                    p2.button("➕ 罰 3 天不能下課", on_click=modify_punishment, args=(sel_sid, 3), use_container_width=True, key=f"punish_3_{sel_sid}")
+                    p1.button("➕ 罰 1 天禁下課", on_click=modify_punishment, args=(sel_sid, 1), use_container_width=True, key=f"punish_1_{sel_sid}")
+                    p2.button("➕ 罰 3 天禁下課", on_click=modify_punishment, args=(sel_sid, 3), use_container_width=True, key=f"punish_3_{sel_sid}")
+                    p3.button("➕ 罰 7 天禁下課", on_click=modify_punishment, args=(sel_sid, 7), use_container_width=True, key=f"punish_7_{sel_sid}")
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     st.markdown('<div class="btn-free">', unsafe_allow_html=True)
-                    p3.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
+                    st.button("✅ 解除所有懲罰 (恢復自由)", on_click=modify_punishment, args=(sel_sid, 0), use_container_width=True, key=f"punish_0_{sel_sid}")
                     st.markdown('</div>', unsafe_allow_html=True)
                     
                     st.info("💡 操作完畢後，您可以點擊上方其他學生繼續修改，或是點選同一位學生來收起此面板。")
