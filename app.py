@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-型態防護版", layout="wide")
+st.set_page_config(page_title="303作業登記-終極防錯版", layout="wide")
 
 st.markdown("""
 <style>
@@ -69,9 +69,9 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .pt-badge { background-color: #FFFACD; border: 2px solid #FFD700; color: #DAA520; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 0.9rem; display: inline-block; margin: 2px; }
 .card-badge { background-color: #FFE4E1; border: 2px solid #FFB6C1; color: #CD5C5C; border-radius: 15px; padding: 4px 8px; font-weight: 900; font-size: 0.9rem; display: inline-block; margin: 2px; }
 
-/* ✨ 狀態標籤樣式 */
-.status-ok { background-color: #E0FFF0; color: #2E8B57; border-radius: 10px; padding: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 8px; border: 1px dashed #3CB371; }
-.status-bad { background-color: #FFF0F0; color: #DC143C; border-radius: 10px; padding: 4px; font-size: 0.85rem; font-weight: bold; margin-top: 8px; border: 1px dashed #CD5C5C; }
+/* ✨ 狀態標籤樣式：增加行高，適應多行排版 */
+.status-ok { background-color: #E0FFF0; color: #2E8B57; border-radius: 10px; padding: 6px 4px; font-size: 0.85rem; font-weight: bold; margin-top: 8px; border: 1px dashed #3CB371; line-height: 1.4; }
+.status-bad { background-color: #FFF0F0; color: #DC143C; border-radius: 10px; padding: 6px 4px; font-size: 0.85rem; font-weight: bold; margin-top: 8px; border: 1px dashed #CD5C5C; line-height: 1.4; }
 
 /* 針對積點按鈕設計的專屬樣式 */
 .btn-add > button { background-color: #87CEEB !important; box-shadow: 0 6px 10px rgba(135, 206, 235, 0.4) !important; }
@@ -91,7 +91,7 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-free > button { background-color: #20B2AA !important; box-shadow: 0 6px 10px rgba(32, 178, 170, 0.4) !important; }
 .btn-free > button:hover { background-color: #008080 !important; }
 
-/* ✨ 升級：為了貼紙牆特別設定的透明感大按鈕 */
+/* 貼紙牆專用的大按鈕 */
 .sticker-btn > button { 
     font-size: 3.5rem !important; 
     padding: 15px 0 !important;   
@@ -111,7 +111,6 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
 .contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
-/* 為了容納可能較長的狀態文字，允許換行並優化字體大小 */
 [data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.0rem !important; overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
@@ -183,7 +182,6 @@ def load_data(sheet_name="Sheet1"):
                 if col not in df.columns: df[col] = ""
         
         df = df.fillna("")
-        # ✨ 防護裝甲：強制所有讀取的資料都是文字，避免 Pandas TypeError
         df = df.astype(str).replace('nan', '')
         
         if not df.empty:
@@ -235,7 +233,6 @@ if 'points_df' not in st.session_state:
         if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
         if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
         if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
-    # ✨ 再次套用防護裝甲，確保都是文字
     st.session_state.points_df = temp_pdf.astype(str)
 
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
@@ -258,21 +255,24 @@ def clean_seat_input(val_str):
         if s: res.append(force_int_str(s))
     return res
 
+# ✨ 終極防禦：加入寫入前強制轉型，徹底消滅 TypeError
 def mark_fast(hw_name, status, input_key, add_perfect=False):
     val = st.session_state[input_key]
     if not val: return
     sids = clean_seat_input(val)
     for sid in sids:
-        # 1. 更新作業狀態
         mask = (st.session_state.main_df["作業名稱"] == hw_name) & (st.session_state.main_df["座號"].astype(str) == str(sid))
         st.session_state.main_df.loc[mask, "繳交狀態"] = status
         st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
         
-        # 2. 如果是完美標記，自動去點數表加一張完美卡
         if add_perfect:
             p_mask = st.session_state.points_df['座號'].astype(str) == str(sid)
             if p_mask.any():
                 idx = st.session_state.points_df.index[p_mask][0]
+                
+                # 🛡️ 寫入前強制將該欄轉為文字型態
+                st.session_state.points_df['完美卡'] = st.session_state.points_df['完美卡'].astype(str)
+                
                 try: curr_card = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
                 except: curr_card = 0
                 st.session_state.points_df.at[idx, '完美卡'] = str(curr_card + 1)
@@ -295,6 +295,7 @@ def modify_points(sid, amount):
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
+        st.session_state.points_df['總積點'] = st.session_state.points_df['總積點'].astype(str)
         try: curr = int(float(st.session_state.points_df.at[idx, '總積點'] or 0))
         except: curr = 0
         st.session_state.points_df.at[idx, '總積點'] = str(curr + amount)
@@ -304,6 +305,7 @@ def modify_perfect_card(sid, amount):
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
+        st.session_state.points_df['完美卡'] = st.session_state.points_df['完美卡'].astype(str)
         try: curr = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
         except: curr = 0
         st.session_state.points_df.at[idx, '完美卡'] = str(max(0, curr + amount))
@@ -311,11 +313,10 @@ def modify_perfect_card(sid, amount):
 
 def modify_all_points(amount):
     if not st.session_state.points_df.empty:
+        st.session_state.points_df['總積點'] = st.session_state.points_df['總積點'].astype(str)
         for idx in st.session_state.points_df.index:
-            try:
-                curr = int(float(st.session_state.points_df.at[idx, '總積點'] or 0))
-            except:
-                curr = 0
+            try: curr = int(float(st.session_state.points_df.at[idx, '總積點'] or 0))
+            except: curr = 0
             st.session_state.points_df.at[idx, '總積點'] = str(curr + amount)
         st.session_state.has_unsaved = True
 
@@ -323,6 +324,7 @@ def modify_punishment(sid, add_days):
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
+        st.session_state.points_df['懲罰結束日期'] = st.session_state.points_df['懲罰結束日期'].astype(str)
         today = date.today()
         
         if add_days == 0:  
@@ -345,6 +347,7 @@ def set_new_avatar(sid, emoji):
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
+        st.session_state.points_df['頭像'] = st.session_state.points_df['頭像'].astype(str)
         st.session_state.points_df.at[idx, '頭像'] = str(emoji)
         st.session_state.has_unsaved = True
 
@@ -417,7 +420,7 @@ def get_student_status(pt_row, main_df, sid):
     if not status_parts:
         return True, "🟢 可以下課"
     else:
-        return False, " | ".join(status_parts)
+        return False, "\n".join(status_parts)
 
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
@@ -481,6 +484,7 @@ if menu == "📖 班級榮譽榜":
         
         is_ok, status_text = get_student_status(row, st.session_state.main_df, sid)
         status_class = "status-ok" if is_ok else "status-bad"
+        status_html = status_text.replace('\n', '<br>')
         
         with grid_cols[idx % 5]:
             st.markdown(f'''
@@ -491,7 +495,7 @@ if menu == "📖 班級榮譽榜":
                     <span class="pt-badge">⭐ {pt} 點</span>
                     <span class="card-badge">🎫 {card} 張</span>
                 </div>
-                <div class="{status_class}">{status_text}</div>
+                <div class="{status_class}">{status_html}</div>
             </div>
             ''', unsafe_allow_html=True)
 
@@ -569,10 +573,12 @@ elif menu == "🔍 個人作業查詢":
                 
                 is_ok, status_text = get_student_status(res_pt.iloc[0], st.session_state.main_df, clean_sid)
             
+            status_disp = status_text.replace('\n', ' | ')
+            
             mc1, mc2, mc3 = st.columns(3)
             mc1.metric("🌟 目前積點", f"{pts} 點")
             mc2.metric("🎫 完美卡數量", f"{cards} 張")
-            mc3.metric("🚦 目前狀態", status_text if not is_ok else "🟢 可以下課")
+            mc3.metric("🚦 目前狀態", status_disp if not is_ok else "🟢 可以下課")
             st.divider()
 
             st.subheader(f"📋 專屬待辦清單")
@@ -702,7 +708,8 @@ elif menu == "🛠️ 老師專屬後台":
                     sel_row = stu_filter.iloc[0]
                     is_ok, status_text = get_student_status(sel_row, st.session_state.main_df, sel_sid)
                     
-                    st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_text}")
+                    status_disp = status_text.replace('\n', ' | ')
+                    st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_disp}")
                     
                     if not st.session_state.rules_df.empty:
                         st.markdown("#### 📜 套用班級規定")
