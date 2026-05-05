@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-綜合狀態版", layout="wide")
+st.set_page_config(page_title="303作業登記-頭像修復版", layout="wide")
 
 st.markdown("""
 <style>
@@ -111,15 +111,16 @@ STUDENT_LIST = [{"座號": str(i), "姓名": n} for i, n in enumerate([
 
 ANIMAL_EMOJIS = ["🐶", "🐱", "🐭", "🐹", "🐰", "🦊", "🐻", "🐼", "🐨", "🐯", "🦁", "🐮", "🦔", "🐸", "🐵", "🐧", "🐦", "🐥", "🦉", "🦄", "🐴", "🐢", "🐳", "🦦", "🦥"]
 
+# ✨ 升級版：使用 .astype(str) 強制轉換比對，解決型態不一致問題
 def get_animal_emoji(sid):
     try:
         if 'points_df' in st.session_state and not st.session_state.points_df.empty:
-            mask = st.session_state.points_df["座號"] == str(sid)
+            mask = st.session_state.points_df["座號"].astype(str) == str(sid)
             if mask.any():
                 avatar = str(st.session_state.points_df.loc[mask, "頭像"].values[0]).strip()
                 if avatar and avatar in ANIMAL_EMOJIS:
                     return avatar
-        index = (int(sid) - 1) % len(ANIMAL_EMOJIS)
+        index = (int(float(sid)) - 1) % len(ANIMAL_EMOJIS)
         return ANIMAL_EMOJIS[index]
     except:
         return "🐾"
@@ -162,8 +163,11 @@ def load_data(sheet_name="Sheet1"):
         if not df.empty:
             df = df[~(df[expected_cols] == "").all(axis=1)]
         
-        if sheet_name == "Sheet1" and not df.empty:
+        # ✨ 強化讀取：只要有座號欄位，全部強制轉為字串
+        if not df.empty and "座號" in df.columns:
             df["座號"] = df["座號"].apply(force_int_str)
+
+        if sheet_name == "Sheet1" and not df.empty:
             df["成績"] = df["成績"].apply(clean_score)
             df = df[df["座號"] != ""]
             for s in STUDENT_LIST:
@@ -180,7 +184,7 @@ def save_data_to_sheet(df, sheet_name):
             empty_row = {col: "" for col in expected_cols}
             df_to_save = pd.DataFrame([empty_row])
         else:
-            if sheet_name in ["Sheet1", "Points"]:
+            if "座號" in df_to_save.columns:
                 df_to_save["座號"] = df_to_save["座號"].apply(force_int_str)
             if sheet_name == "Sheet1":
                 df_to_save["成績"] = df_to_save["成績"].apply(clean_score)
@@ -233,7 +237,7 @@ def mark_fast(hw_name, status, input_key):
     if not val: return
     sids = clean_seat_input(val)
     for sid in sids:
-        mask = (st.session_state.main_df["作業名稱"] == hw_name) & (st.session_state.main_df["座號"] == sid)
+        mask = (st.session_state.main_df["作業名稱"] == hw_name) & (st.session_state.main_df["座號"].astype(str) == str(sid))
         st.session_state.main_df.loc[mask, "繳交狀態"] = status
         st.session_state.main_df.loc[mask, "更新日期"] = str(date.today())
     st.session_state.has_unsaved = True
@@ -251,7 +255,7 @@ def update_score(idx, score_key):
         st.session_state.has_unsaved = True
 
 def modify_points(sid, amount):
-    mask = st.session_state.points_df['座號'] == sid
+    mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
         try: curr = int(float(st.session_state.points_df.at[idx, '總積點'] or 0))
@@ -260,7 +264,7 @@ def modify_points(sid, amount):
         st.session_state.has_unsaved = True
 
 def modify_perfect_card(sid, amount):
-    mask = st.session_state.points_df['座號'] == sid
+    mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
         try: curr = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
@@ -279,7 +283,7 @@ def modify_all_points(amount):
         st.session_state.has_unsaved = True
 
 def modify_punishment(sid, add_days):
-    mask = st.session_state.points_df['座號'] == sid
+    mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
         today = date.today()
@@ -300,12 +304,13 @@ def modify_punishment(sid, add_days):
             
         st.session_state.has_unsaved = True
 
+# ✨ 修改：加入強制字串比對，徹底解決找不到學生的問題
 def change_avatar(sid):
     new_avatar = st.session_state[f"avatar_sel_{sid}"]
-    mask = st.session_state.points_df['座號'] == sid
+    mask = st.session_state.points_df['座號'].astype(str) == str(sid)
     if mask.any():
         idx = st.session_state.points_df.index[mask][0]
-        st.session_state.points_df.at[idx, '頭像'] = new_avatar
+        st.session_state.points_df.at[idx, '頭像'] = str(new_avatar)
         st.session_state.has_unsaved = True
 
 def set_active_student(sid):
@@ -348,9 +353,7 @@ def add_custom_rule():
 def update_rem_range():
     st.session_state.remind_range_val = st.session_state.temp_range
 
-# ✨ 升級版輔助函數：結合「作業缺交」與「懲罰天數」判斷下課狀態
 def get_student_status(pt_row, main_df, sid):
-    # 1. 檢查懲罰狀態
     end_str = pt_row.get('懲罰結束日期', "")
     is_punished = False
     punish_text = ""
@@ -364,12 +367,10 @@ def get_student_status(pt_row, main_df, sid):
     except:
         pass
     
-    # 2. 檢查作業缺交狀態
-    hw_df = main_df[main_df["座號"] == str(sid)]
+    hw_df = main_df[main_df["座號"].astype(str) == str(sid)]
     missing_hw = hw_df[hw_df["繳交狀態"] != "已繳交"]
     hw_missing_count = len(missing_hw)
     
-    # 3. 綜合判斷能不能下課
     if is_punished and hw_missing_count > 0:
         return False, f"{punish_text} & 欠 {hw_missing_count} 項作業"
     elif is_punished:
@@ -439,7 +440,6 @@ if menu == "📖 班級榮譽榜":
         card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
         emoji = get_animal_emoji(sid)
         
-        # ✨ 呼叫綜合判斷函數
         is_ok, status_text = get_student_status(row, st.session_state.main_df, sid)
         status_class = "status-ok" if is_ok else "status-bad"
         
@@ -500,7 +500,7 @@ elif menu == "🔍 個人作業查詢":
     sid = st.text_input("輸入座號查詢您的作業 (1-22)：", placeholder="例如：5")
     if sid:
         clean_sid = force_int_str(sid)
-        res = st.session_state.main_df[st.session_state.main_df["座號"] == clean_sid]
+        res = st.session_state.main_df[st.session_state.main_df["座號"].astype(str) == str(clean_sid)]
         
         if not res.empty:
             stu_name = res.iloc[0]['姓名']
@@ -517,7 +517,7 @@ elif menu == "🔍 個人作業查詢":
             
             st.divider()
             
-            res_pt = st.session_state.points_df[st.session_state.points_df["座號"] == clean_sid]
+            res_pt = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(clean_sid)]
             pts, cards = 0, 0
             is_ok, status_text = True, "🟢 可以下課"
             if not res_pt.empty:
@@ -526,7 +526,6 @@ elif menu == "🔍 個人作業查詢":
                 try: cards = int(float(res_pt.iloc[0]['完美卡'] or 0))
                 except: cards = 0
                 
-                # ✨ 呼叫綜合判斷函數
                 is_ok, status_text = get_student_status(res_pt.iloc[0], st.session_state.main_df, clean_sid)
             
             mc1, mc2, mc3 = st.columns(3)
@@ -645,7 +644,6 @@ elif menu == "🛠️ 老師專屬後台":
                 card = row.get("完美卡", "0") if str(row.get("完美卡", "0")).strip() != "" else "0"
                 emoji = get_animal_emoji(sid)
                 
-                # ✨ 呼叫綜合判斷函數更新按鈕上的小燈號
                 is_ok, _ = get_student_status(row, st.session_state.main_df, sid)
                 btn_status = "🟢" if is_ok else "🔴"
                 
@@ -656,9 +654,8 @@ elif menu == "🛠️ 老師專屬後台":
             if st.session_state.selected_point_sid:
                 st.divider()
                 sel_sid = st.session_state.selected_point_sid
-                sel_row = st.session_state.points_df[st.session_state.points_df["座號"] == sel_sid].iloc[0]
+                sel_row = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sel_sid)].iloc[0]
                 
-                # ✨ 在展開的操作面板顯示最新狀態
                 is_ok, status_text = get_student_status(sel_row, st.session_state.main_df, sel_sid)
                 
                 st.markdown(f"### 正在管理：{get_animal_emoji(sel_sid)} {sel_sid}. {sel_row['姓名']}  👉 {status_text}")
@@ -788,7 +785,7 @@ elif menu == "🛠️ 老師專屬後台":
             tsid = st.text_input("管理座號：", key="tsid_mgr", placeholder="輸入座號查詢...")
             if tsid:
                 clean_tsid = force_int_str(tsid)
-                sm = st.session_state.main_df[st.session_state.main_df["座號"] == clean_tsid]
+                sm = st.session_state.main_df[st.session_state.main_df["座號"].astype(str) == str(clean_tsid)]
                 if not sm.empty:
                     st.markdown(f"#### 👤 學生：{sm.iloc[0]['姓名']}")
                     
