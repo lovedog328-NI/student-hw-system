@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-整數防呆版", layout="wide")
+st.set_page_config(page_title="303作業登記-班長權限版", layout="wide")
 
 st.markdown("""
 <style>
@@ -286,15 +286,17 @@ def mark_fast(hw_name, status, input_key, add_perfect=False):
     st.session_state[input_key] = "" 
 
 def update_single_status(idx, status):
-    st.session_state.main_df.at[idx, "繳交狀態"] = status
-    st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
-    st.session_state.has_unsaved = True
+    if idx in st.session_state.main_df.index:
+        st.session_state.main_df.at[idx, "繳交狀態"] = status
+        st.session_state.main_df.at[idx, "更新日期"] = str(date.today())
+        st.session_state.has_unsaved = True
 
 def update_score(idx, score_key):
-    new_val = clean_score(st.session_state[score_key])
-    if str(st.session_state.main_df.at[idx, "成績"]) != new_val:
-        st.session_state.main_df.at[idx, "成績"] = new_val
-        st.session_state.has_unsaved = True
+    if idx in st.session_state.main_df.index:
+        new_val = clean_score(st.session_state[score_key])
+        if str(st.session_state.main_df.at[idx, "成績"]) != new_val:
+            st.session_state.main_df.at[idx, "成績"] = new_val
+            st.session_state.has_unsaved = True
 
 def modify_points(sid, amount):
     mask = st.session_state.points_df['座號'].astype(str) == str(sid)
@@ -430,13 +432,15 @@ def get_student_status(pt_row, main_df, sid):
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-menu = st.sidebar.radio("請選擇功能：", ["📖 班級榮譽榜", "📊 作業待辦一覽", "📓 每日聯絡簿", "🔍 個人作業查詢", "🛠️ 老師專屬後台"], key="main_menu")
+menu = st.sidebar.radio("請選擇功能：", ["📖 班級榮譽榜", "📊 作業待辦一覽", "📓 每日聯絡簿", "🔍 個人作業查詢", "👦 班長小幫手", "🛠️ 老師專屬後台"], key="main_menu")
 
 st.sidebar.divider()
-pwd = st.sidebar.text_input("老師密碼 (管理員專用)", type="password")
-is_admin = (pwd == "alice")
+pwd = st.sidebar.text_input("輸入密碼 (老師/班長專用)", type="password")
 
-if is_admin:
+is_admin = (pwd == "alice")
+is_monitor = (pwd == "303")
+
+if is_admin or is_monitor:
     if st.session_state.has_unsaved:
         st.sidebar.error("🚨 資料尚未同步至雲端")
         if st.sidebar.button("💾 儲存並同步", type="primary", use_container_width=True):
@@ -483,7 +487,6 @@ if menu == "📖 班級榮譽榜":
     for idx, row in sorted_pts.iterrows():
         sid = row["座號"]
         name = row["姓名"]
-        # ✨ 確保顯示的積點與卡片都是整數
         try: pt = int(float(row["總積點"]))
         except: pt = 0
         try: card = int(float(row.get("完美卡", 0)))
@@ -574,7 +577,6 @@ elif menu == "🔍 個人作業查詢":
             pts, cards = 0, 0
             is_ok, status_text = True, "🟢 可以下課"
             if not res_pt.empty:
-                # ✨ 確保為整數
                 try: pts = int(float(res_pt.iloc[0]['總積點']))
                 except: pts = 0
                 try: cards = int(float(res_pt.iloc[0]['完美卡']))
@@ -599,6 +601,39 @@ elif menu == "🔍 個人作業查詢":
                     ca, cb = st.columns([3, 1])
                     ca.write(f"📌 **{row['作業名稱']}**")
                     cb.markdown(f":{'red' if row['繳交狀態']=='需訂正' else 'orange'}[{row['繳交狀態']}]")
+
+# ✨ 班長小幫手專屬介面：極簡化，只保留收作業
+elif menu == "👦 班長小幫手":
+    if not (is_admin or is_monitor):
+        st.warning("⚠️ 這是班長專屬的秘密基地，請在左側輸入班長密碼喔！ 🤫")
+    else:
+        st.success("👦 歡迎班長！請在這裡協助老師登記同學們的作業喔！")
+        
+        all_hws = list(st.session_state.main_df["作業名稱"].unique())
+        hw_names = ["請選擇"] + all_hws
+        hw_display = ["請選擇"] + [f"{hw} (欠 {len(st.session_state.main_df[(st.session_state.main_df['作業名稱'] == hw) & (st.session_state.main_df['繳交狀態'] != '已繳交')])} 人)" for hw in all_hws]
+        
+        current_index = 0
+        if st.session_state.selected_hw_base in hw_names:
+            current_index = hw_names.index(st.session_state.selected_hw_base)
+        
+        st.selectbox("選擇作業項目", hw_display, index=current_index, key="hw_sel_widget", on_change=on_hw_select)
+        
+        target_hw = st.session_state.selected_hw_base
+        if target_hw != "請選擇":
+            st.markdown(f"### ⚡ 座號快填 - {target_hw}")
+            
+            done_key_m = f"fd_m_{target_hw}"
+            st.text_input("🟢 快速標記【已繳交】(Enter送出)", key=done_key_m, placeholder="例: 1,3,5", on_change=mark_fast, args=(target_hw, "已繳交", done_key_m, False))
+
+            st.divider()
+            
+            m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
+            for i, r in m.iterrows():
+                ca, cb, cc = st.columns([1.5, 1.5, 1])
+                ca.write(f"**{r['座號']}. {r['姓名']}**")
+                cb.markdown(f":{'red' if r['繳交狀態']=='需訂正' else ('orange' if r['繳交狀態']=='未繳交' else 'green')}[**{r['繳交狀態']}**]")
+                cc.button("標記已交", key=f"d_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交"))
 
 elif menu == "🛠️ 老師專屬後台":
     if not is_admin:
@@ -712,7 +747,6 @@ elif menu == "🛠️ 老師專屬後台":
             for idx, row in sorted_pts.iterrows():
                 sid = row["座號"]
                 name = row["姓名"]
-                # ✨ 在老師後台的按鈕上也確保顯示整數
                 try: pt = int(float(row["總積點"]))
                 except: pt = 0
                 try: card = int(float(row.get("完美卡", 0)))
