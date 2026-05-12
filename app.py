@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import date, datetime, timedelta
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-班長權限版", layout="wide")
+st.set_page_config(page_title="303作業登記-進度追蹤版", layout="wide")
 
 st.markdown("""
 <style>
@@ -53,6 +53,8 @@ h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; let
 /* 🎀 標籤變手帳風虛線 */
 .hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
 .hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
+/* ✨ 新增：已繳交未改的藍色專屬標籤 */
+.hw-tag-blue { background-color: #E0F7FA; color: #008B8B; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #00CED1; }
 
 /* 🎀 放大的分頁標籤，圓潤化 */
 button[data-baseweb="tab"] { font-size: 1.3rem !important; font-weight: 700 !important; padding: 1rem 1.5rem !important; border-radius: 20px 20px 0 0 !important; color: #FF7F50 !important;}
@@ -526,7 +528,8 @@ elif menu == "📊 作業待辦一覽":
             with cols[idx % 4]:
                 tags_html = ""
                 for _, row in student_data.iterrows():
-                    css_class = "hw-tag-red" if row['繳交狀態'] == "需訂正" else "hw-tag-orange"
+                    # ✨ 加上藍色的已交未改標籤判斷
+                    css_class = "hw-tag-red" if row['繳交狀態'] == "需訂正" else ("hw-tag-blue" if row['繳交狀態'] == "已繳交未改" else "hw-tag-orange")
                     tags_html += f'<span class="{css_class}">{row["作業名稱"]} ({row["繳交狀態"]})</span>'
                 st.markdown(f'<div class="student-card"><div class="student-name">👤 {sid}. {name}</div><div>{tags_html}</div></div>', unsafe_allow_html=True)
 
@@ -600,9 +603,10 @@ elif menu == "🔍 個人作業查詢":
                 for _, row in todo.iterrows():
                     ca, cb = st.columns([3, 1])
                     ca.write(f"📌 **{row['作業名稱']}**")
-                    cb.markdown(f":{'red' if row['繳交狀態']=='需訂正' else 'orange'}[{row['繳交狀態']}]")
+                    # ✨ 加上藍色的已交未改文字判斷
+                    color = 'red' if row['繳交狀態'] == '需訂正' else ('blue' if row['繳交狀態'] == '已繳交未改' else ('orange' if row['繳交狀態'] == '未繳交' else 'green'))
+                    cb.markdown(f":{color}[**{row['繳交狀態']}**]")
 
-# ✨ 班長小幫手專屬介面：極簡化，只保留收作業
 elif menu == "👦 班長小幫手":
     if not (is_admin or is_monitor):
         st.warning("⚠️ 這是班長專屬的秘密基地，請在左側輸入班長密碼喔！ 🤫")
@@ -623,17 +627,26 @@ elif menu == "👦 班長小幫手":
         if target_hw != "請選擇":
             st.markdown(f"### ⚡ 座號快填 - {target_hw}")
             
+            # ✨ 班長快填區：加入已交未改選項
+            c1, c2 = st.columns(2)
             done_key_m = f"fd_m_{target_hw}"
-            st.text_input("🟢 快速標記【已繳交】(Enter送出)", key=done_key_m, placeholder="例: 1,3,5", on_change=mark_fast, args=(target_hw, "已繳交", done_key_m, False))
+            ungraded_key_m = f"fu_m_{target_hw}"
+            with c1: 
+                st.text_input("🟢 快速標記【一般已繳交】(Enter送出)", key=done_key_m, placeholder="例: 1,3", on_change=mark_fast, args=(target_hw, "已繳交", done_key_m, False))
+            with c2: 
+                st.text_input("🔵 快速標記【已交未改】(Enter送出)", key=ungraded_key_m, placeholder="例: 2,4", on_change=mark_fast, args=(target_hw, "已繳交未改", ungraded_key_m, False))
 
             st.divider()
             
             m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
             for i, r in m.iterrows():
-                ca, cb, cc = st.columns([1.5, 1.5, 1])
+                # ✨ 班長單筆區：加入未改按鈕
+                ca, cb, cc, cd = st.columns([1.5, 1.5, 0.8, 0.8])
                 ca.write(f"**{r['座號']}. {r['姓名']}**")
-                cb.markdown(f":{'red' if r['繳交狀態']=='需訂正' else ('orange' if r['繳交狀態']=='未繳交' else 'green')}[**{r['繳交狀態']}**]")
-                cc.button("標記已交", key=f"d_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交"))
+                color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
+                cb.markdown(f":{color}[**{r['繳交狀態']}**]")
+                cc.button("未改", key=f"u_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交未改"))
+                cd.button("已交", key=f"d_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交"))
 
 elif menu == "🛠️ 老師專屬後台":
     if not is_admin:
@@ -885,29 +898,40 @@ elif menu == "🛠️ 老師專屬後台":
             target_hw = st.session_state.selected_hw_base
             if target_hw != "請選擇":
                 st.markdown(f"### ⚡ 座號快填 - {target_hw}")
-                c1, c2, c3 = st.columns(3)
+                
+                # ✨ 老師快填區：加入 4 個選項框
+                c1, c2, c3, c4 = st.columns(4)
                 perfect_key = f"fp_{target_hw}"
                 done_key = f"fd_{target_hw}"
+                ungraded_key = f"fu_{target_hw}"
                 edit_key = f"fe_{target_hw}"
                 
                 with c1: 
-                    st.text_input("🌟 完美+1，已完成", key=perfect_key, placeholder="例: 1,3,5", on_change=mark_fast, args=(target_hw, "已繳交", perfect_key, True))
+                    st.text_input("🌟 完美+1，已完成", key=perfect_key, placeholder="例: 1,3", on_change=mark_fast, args=(target_hw, "已繳交", perfect_key, True))
                 with c2: 
                     st.text_input("🟢 一般已繳交", key=done_key, placeholder="例: 2,4", on_change=mark_fast, args=(target_hw, "已繳交", done_key, False))
                 with c3: 
+                    st.text_input("🔵 已交未改", key=ungraded_key, placeholder="例: 5,6", on_change=mark_fast, args=(target_hw, "已繳交未改", ungraded_key, False))
+                with c4: 
                     st.text_input("🔴 需訂正", key=edit_key, placeholder="例: 12", on_change=mark_fast, args=(target_hw, "需訂正", edit_key, False))
 
                 st.divider()
                 
                 m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
                 for i, r in m.iterrows():
-                    ca, cb, cc, cd, ce = st.columns([1.2, 1.2, 1, 1, 1.2])
+                    # ✨ 老師單筆區：加入未改按鈕，調整寬度
+                    ca, cb, cc, cd, ce, cf = st.columns([1.2, 1.2, 0.8, 0.8, 0.8, 1.2])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
-                    cb.markdown(f":{'red' if r['繳交狀態']=='需訂正' else ('orange' if r['繳交狀態']=='未繳交' else 'green')}[**{r['繳交狀態']}**]")
+                    
+                    color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
+                    cb.markdown(f":{color}[**{r['繳交狀態']}**]")
+                    
                     cc.button("訂正", key=f"r_{target_hw}_{i}", on_click=update_single_status, args=(i, "需訂正"))
-                    cd.button("已交", key=f"d_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交"))
+                    cd.button("未改", key=f"u_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交未改"))
+                    ce.button("已交", key=f"d_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交"))
+                    
                     score_key = f"sc_{target_hw}_{i}"
-                    ce.text_input("成績", value=str(r['成績']), key=score_key, label_visibility="collapsed", on_change=update_score, args=(i, score_key))
+                    cf.text_input("成績", value=str(r['成績']), key=score_key, label_visibility="collapsed", on_change=update_score, args=(i, score_key))
 
         with tab2:
             tsid = st.text_input("管理座號：", key="tsid_mgr", placeholder="輸入座號查詢...")
@@ -925,11 +949,15 @@ elif menu == "🛠️ 老師專屬後台":
                         st.success("🎉 太棒了！這位學生目前沒有欠交任何作業！")
                     else:
                         for i, r in sm.iterrows():
-                            ra, rb, rc, rd = st.columns([3, 2, 1, 1])
+                            # ✨ 修改個人管理區按鈕
+                            ra, rb, rc, rd, re = st.columns([2.5, 1.5, 0.8, 0.8, 0.8])
                             ra.write(f"📌 {r['作業名稱']}")
-                            rb.markdown(f":{'red' if r['繳交狀態']=='需訂正' else ('orange' if r['繳交狀態']=='未繳交' else 'green')}[**{r['繳交狀態']}**]")
+                            color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
+                            rb.markdown(f":{color}[**{r['繳交狀態']}**]")
+                            
                             rc.button("訂正", key=f"t2_r_{i}", on_click=update_single_status, args=(i, "需訂正"))
-                            rd.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
+                            rd.button("未改", key=f"t2_u_{i}", on_click=update_single_status, args=(i, "已繳交未改"))
+                            re.button("已交", key=f"t2_d_{i}", on_click=update_single_status, args=(i, "已繳交"))
 
         with tab_line:
             st.markdown("#### 📋 快速複製：群組推播文字")
