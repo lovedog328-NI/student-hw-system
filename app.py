@@ -2,9 +2,10 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date, datetime, timedelta
+import random
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-進度追蹤版", layout="wide")
+st.set_page_config(page_title="303作業登記-專業抽獎版", layout="wide")
 
 st.markdown("""
 <style>
@@ -53,7 +54,6 @@ h2, h3, h4, h5, h6 { color: #FF7F50 !important; font-weight: 700 !important; let
 /* 🎀 標籤變手帳風虛線 */
 .hw-tag-red { background-color: #FFE4E1; color: #FF69B4; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFB6C1; }
 .hw-tag-orange { background-color: #FFFACD; color: #FFA500; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #FFD700; }
-/* ✨ 新增：已繳交未改的藍色專屬標籤 */
 .hw-tag-blue { background-color: #E0F7FA; color: #008B8B; padding: 8px 14px; border-radius: 25px; font-size: 1.1rem; font-weight: 700; display: inline-block; margin: 5px 5px 5px 0; border: 2px dashed #00CED1; }
 
 /* 🎀 放大的分頁標籤，圓潤化 */
@@ -86,28 +86,14 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-rule > button:hover { background-color: #6A5ACD !important; }
 .btn-all > button { background-color: #3CB371 !important; box-shadow: 0 6px 10px rgba(60, 179, 113, 0.4) !important; }
 .btn-all > button:hover { background-color: #2E8B57 !important; }
-
-/* 懲罰按鈕專屬 */
 .btn-punish > button { background-color: #696969 !important; box-shadow: 0 6px 10px rgba(105, 105, 105, 0.4) !important; }
 .btn-punish > button:hover { background-color: #2F4F4F !important; }
 .btn-free > button { background-color: #20B2AA !important; box-shadow: 0 6px 10px rgba(32, 178, 170, 0.4) !important; }
 .btn-free > button:hover { background-color: #008080 !important; }
 
 /* 貼紙牆專用的大按鈕 */
-.sticker-btn > button { 
-    font-size: 3.5rem !important; 
-    padding: 15px 0 !important;   
-    background-color: #ffffff !important; 
-    border: 2px dashed #FFB6C1 !important; 
-    color: #000 !important; 
-    box-shadow: none !important;
-}
-.sticker-btn > button:hover { 
-    background-color: #FFF0F5 !important; 
-    transform: scale(1.1) !important; 
-    border: 2px solid #FF69B4 !important;
-    z-index: 1; 
-}
+.sticker-btn > button { font-size: 3.5rem !important; padding: 15px 0 !important; background-color: #ffffff !important; border: 2px dashed #FFB6C1 !important; color: #000 !important; box-shadow: none !important;}
+.sticker-btn > button:hover { background-color: #FFF0F5 !important; transform: scale(1.1) !important; border: 2px solid #FF69B4 !important; z-index: 1; }
 
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
@@ -148,13 +134,16 @@ def get_animal_emoji(sid):
     except:
         return "🐾"
 
+# ✨ 加入 Prizes 與 LotteryLogs 資料表
 SHEET_COLUMNS = {
     "Sheet1": ["座號", "姓名", "作業名稱", "繳交狀態", "成績", "更新日期", "已給完美卡"],
     "Salary": ["日期", "項目", "金額"],
     "Reminders": ["日期", "事項", "狀態"],
     "ContactBook": ["日期", "內容"],
     "Points": ["座號", "姓名", "總積點", "完美卡", "頭像", "懲罰結束日期"],
-    "Rules": ["規定名稱", "點數"] 
+    "Rules": ["規定名稱", "點數"],
+    "Prizes": ["獎品名稱", "機率權重"],
+    "LotteryLogs": ["時間", "座號", "姓名", "獲得獎品", "狀態"]
 }
 
 # --- 2. 核心資料與防錯邏輯 ---
@@ -220,11 +209,18 @@ def save_data_to_sheet(df, sheet_name):
         return False
 
 # --- 3. 系統暫存初始化 ---
-if 'main_df' not in st.session_state: st.session_state.main_df = load_data("Sheet1")
-if 'salary_df' not in st.session_state: st.session_state.salary_df = load_data("Salary")
-if 'reminder_df' not in st.session_state: st.session_state.reminder_df = load_data("Reminders")
-if 'contact_df' not in st.session_state: st.session_state.contact_df = load_data("ContactBook")
-if 'rules_df' not in st.session_state: st.session_state.rules_df = load_data("Rules")
+for key, s_name in [('main_df', 'Sheet1'), ('salary_df', 'Salary'), ('reminder_df', 'Reminders'), ('contact_df', 'ContactBook'), ('rules_df', 'Rules'), ('prizes_df', 'Prizes'), ('lottery_df', 'LotteryLogs')]:
+    if key not in st.session_state: st.session_state[key] = load_data(s_name)
+
+# ✨ 預設獎品池保護（如果完全沒設定，給予預設值）
+if st.session_state.prizes_df.empty:
+    default_prizes = [
+        {"獎品名稱": "🍬 糖果一顆", "機率權重": "100"},
+        {"獎品名稱": "📝 免寫一項小作業", "機率權重": "10"},
+        {"獎品名稱": "⏱️ 下課提早 3 分鐘", "機率權重": "30"},
+        {"獎品名稱": "👑 榮譽小幫手一次", "機率權重": "50"}
+    ]
+    st.session_state.prizes_df = pd.DataFrame(default_prizes)
 
 if 'points_df' not in st.session_state: 
     temp_pdf = load_data("Points")
@@ -248,6 +244,8 @@ if "selected_point_sid" not in st.session_state: st.session_state.selected_point
 
 if "new_rule_name" not in st.session_state: st.session_state.new_rule_name = ""
 if "new_rule_pt" not in st.session_state: st.session_state.new_rule_pt = 1
+if "new_prize_name" not in st.session_state: st.session_state.new_prize_name = ""
+if "lucky_draw_result" not in st.session_state: st.session_state.lucky_draw_result = None
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -320,6 +318,52 @@ def modify_perfect_card(sid, amount):
         st.session_state.points_df.at[idx, '完美卡'] = str(max(0, curr + amount))
         st.session_state.has_unsaved = True
 
+# ✨ 完美卡兌換抽獎與紀錄引擎
+def handle_card_redeem(sid):
+    mask = st.session_state.points_df['座號'].astype(str) == str(sid)
+    if mask.any():
+        idx = st.session_state.points_df.index[mask][0]
+        st.session_state.points_df['完美卡'] = st.session_state.points_df['完美卡'].astype(str)
+        try: curr = int(float(st.session_state.points_df.at[idx, '完美卡'] or 0))
+        except: curr = 0
+        
+        if curr >= 1:
+            # 扣除卡片
+            st.session_state.points_df.at[idx, '完美卡'] = str(curr - 1)
+            st.session_state.has_unsaved = True
+            
+            # 開始抽獎
+            if not st.session_state.prizes_df.empty:
+                prizes = st.session_state.prizes_df['獎品名稱'].tolist()
+                try: weights = [int(float(w)) for w in st.session_state.prizes_df['機率權重']]
+                except: weights = [1] * len(prizes)
+                won_prize = random.choices(prizes, weights=weights, k=1)[0]
+            else:
+                won_prize = "🍬 神秘小禮物"
+            
+            # 寫入抽獎紀錄
+            stu_name = st.session_state.points_df.at[idx, '姓名']
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+            new_log = pd.DataFrame([{"時間": now_str, "座號": str(sid), "姓名": stu_name, "獲得獎品": won_prize, "狀態": "未領取"}])
+            st.session_state.lottery_df = pd.concat([st.session_state.lottery_df, new_log], ignore_index=True)
+            
+            # 設定畫面顯示
+            st.session_state.lucky_draw_result = {
+                "sid": sid,
+                "prize": won_prize
+            }
+        else:
+            st.session_state.lucky_draw_result = {"error": "哎呀！完美卡數量不足，無法兌換抽獎喔！"}
+
+def add_prize():
+    p_name = st.session_state.new_prize_name.strip()
+    p_weight = st.session_state.new_prize_weight
+    if p_name:
+        new_p = pd.DataFrame([{"獎品名稱": p_name, "機率權重": str(p_weight)}])
+        st.session_state.prizes_df = pd.concat([st.session_state.prizes_df, new_p], ignore_index=True)
+        st.session_state.has_unsaved = True
+        st.session_state.new_prize_name = "" 
+
 def modify_all_points(amount):
     if not st.session_state.points_df.empty:
         st.session_state.points_df['總積點'] = st.session_state.points_df['總積點'].astype(str)
@@ -361,6 +405,7 @@ def set_new_avatar(sid, emoji):
         st.session_state.has_unsaved = True
 
 def set_active_student(sid):
+    st.session_state.lucky_draw_result = None
     if st.session_state.selected_point_sid == sid:
         st.session_state.selected_point_sid = None
     else:
@@ -452,6 +497,10 @@ if is_admin or is_monitor:
             save_data_to_sheet(st.session_state.contact_df, "ContactBook")
             save_data_to_sheet(st.session_state.points_df, "Points")
             save_data_to_sheet(st.session_state.rules_df, "Rules")
+            # ✨ 同步儲存抽獎資料表
+            save_data_to_sheet(st.session_state.prizes_df, "Prizes")
+            save_data_to_sheet(st.session_state.lottery_df, "LotteryLogs")
+            
             st.session_state.has_unsaved = False
             st.sidebar.success("✅ 已存檔")
             st.rerun()
@@ -464,6 +513,8 @@ if st.sidebar.button("🔄 重新載入最新資料"):
     st.session_state.reminder_df = load_data("Reminders")
     st.session_state.contact_df = load_data("ContactBook")
     st.session_state.rules_df = load_data("Rules")
+    st.session_state.prizes_df = load_data("Prizes")
+    st.session_state.lottery_df = load_data("LotteryLogs")
     
     temp_pdf = load_data("Points")
     if temp_pdf.empty:
@@ -528,7 +579,6 @@ elif menu == "📊 作業待辦一覽":
             with cols[idx % 4]:
                 tags_html = ""
                 for _, row in student_data.iterrows():
-                    # ✨ 加上藍色的已交未改標籤判斷
                     css_class = "hw-tag-red" if row['繳交狀態'] == "需訂正" else ("hw-tag-blue" if row['繳交狀態'] == "已繳交未改" else "hw-tag-orange")
                     tags_html += f'<span class="{css_class}">{row["作業名稱"]} ({row["繳交狀態"]})</span>'
                 st.markdown(f'<div class="student-card"><div class="student-name">👤 {sid}. {name}</div><div>{tags_html}</div></div>', unsafe_allow_html=True)
@@ -603,7 +653,6 @@ elif menu == "🔍 個人作業查詢":
                 for _, row in todo.iterrows():
                     ca, cb = st.columns([3, 1])
                     ca.write(f"📌 **{row['作業名稱']}**")
-                    # ✨ 加上藍色的已交未改文字判斷
                     color = 'red' if row['繳交狀態'] == '需訂正' else ('blue' if row['繳交狀態'] == '已繳交未改' else ('orange' if row['繳交狀態'] == '未繳交' else 'green'))
                     cb.markdown(f":{color}[**{row['繳交狀態']}**]")
 
@@ -627,7 +676,6 @@ elif menu == "👦 班長小幫手":
         if target_hw != "請選擇":
             st.markdown(f"### ⚡ 座號快填 - {target_hw}")
             
-            # ✨ 班長快填區：加入已交未改選項
             c1, c2 = st.columns(2)
             done_key_m = f"fd_m_{target_hw}"
             ungraded_key_m = f"fu_m_{target_hw}"
@@ -640,7 +688,6 @@ elif menu == "👦 班長小幫手":
             
             m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
             for i, r in m.iterrows():
-                # ✨ 班長單筆區：加入未改按鈕
                 ca, cb, cc, cd = st.columns([1.5, 1.5, 0.8, 0.8])
                 ca.write(f"**{r['座號']}. {r['姓名']}**")
                 color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
@@ -671,7 +718,8 @@ elif menu == "🛠️ 老師專屬後台":
                 list_html = "".join([f"<li>📌 {item}</li>" for item in active_rems])
                 st.markdown(f'<div class="today-alert"><h3>🚨 今日重要提醒</h3><ul>{list_html}</ul></div>', unsafe_allow_html=True)
 
-        tab_remind, tab_points, tab_contact, tab1, tab2, tab_line, tab3, tab_money = st.tabs(["📌 提醒", "🌟 點數與完美卡", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資"])
+        # ✨ 增加「🎁 抽獎管理」分頁
+        tab_remind, tab_points, tab_contact, tab1, tab2, tab_line, tab3, tab_money, tab_lottery = st.tabs(["📌 提醒", "🌟 點數與完美卡", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資", "🎁 抽獎管理"])
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
@@ -827,8 +875,36 @@ elif menu == "🛠️ 老師專屬後台":
                     st.markdown('<div class="btn-card">', unsafe_allow_html=True)
                     c1, c2 = st.columns(2)
                     c1.button("➕ 獲得 1 張完美卡", on_click=modify_perfect_card, args=(sel_sid, 1), use_container_width=True, key=f"card_add_{sel_sid}")
-                    c2.button("➖ 扣除次數 (兌換使用)", on_click=modify_perfect_card, args=(sel_sid, -1), use_container_width=True, key=f"card_sub_{sel_sid}")
+                    # ✨ 更換成抽獎兌換按鈕
+                    c2.button("🎁 扣除次數 (兌換抽獎)", on_click=handle_card_redeem, args=(sel_sid,), use_container_width=True, key=f"card_sub_{sel_sid}")
                     st.markdown('</div>', unsafe_allow_html=True)
+
+                    # ✨ 抽獎動畫與結果顯示
+                    if st.session_state.lucky_draw_result:
+                        res = st.session_state.lucky_draw_result
+                        if res.get("sid") == sel_sid or "error" in res:
+                            if "error" in res:
+                                st.error(res["error"])
+                                if st.button("關閉提醒", key="close_err"):
+                                    st.session_state.lucky_draw_result = None
+                                    st.rerun()
+                            else:
+                                st.balloons()
+                                st.markdown(f'''
+                                <div style="background: linear-gradient(135deg, #FFD700, #FF8C00); padding: 25px; border-radius: 20px; text-align: center; color: white; margin-top: 15px; box-shadow: 0 8px 20px rgba(255,140,0,0.5); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+                                    <h3 style="color: white !important; margin:0; font-size: 1.5rem;">🎉 完美卡兌換成功！幸運大抽獎 🎉</h3>
+                                    <h1 style="color: #fff !important; font-size: 3.5rem; margin: 15px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">{res['prize']}</h1>
+                                </div>
+                                <style>
+                                @keyframes popIn {{
+                                    0% {{ transform: scale(0.5); opacity: 0; }}
+                                    100% {{ transform: scale(1); opacity: 1; }}
+                                }}
+                                </style>
+                                ''', unsafe_allow_html=True)
+                                if st.button("✅ 確認並關閉", key="close_draw", use_container_width=True):
+                                    st.session_state.lucky_draw_result = None
+                                    st.rerun()
 
                     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -898,8 +974,6 @@ elif menu == "🛠️ 老師專屬後台":
             target_hw = st.session_state.selected_hw_base
             if target_hw != "請選擇":
                 st.markdown(f"### ⚡ 座號快填 - {target_hw}")
-                
-                # ✨ 老師快填區：加入 4 個選項框
                 c1, c2, c3, c4 = st.columns(4)
                 perfect_key = f"fp_{target_hw}"
                 done_key = f"fd_{target_hw}"
@@ -919,7 +993,6 @@ elif menu == "🛠️ 老師專屬後台":
                 
                 m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
                 for i, r in m.iterrows():
-                    # ✨ 老師單筆區：加入未改按鈕，調整寬度
                     ca, cb, cc, cd, ce, cf = st.columns([1.2, 1.2, 0.8, 0.8, 0.8, 1.2])
                     ca.write(f"**{r['座號']}. {r['姓名']}**")
                     
@@ -949,7 +1022,6 @@ elif menu == "🛠️ 老師專屬後台":
                         st.success("🎉 太棒了！這位學生目前沒有欠交任何作業！")
                     else:
                         for i, r in sm.iterrows():
-                            # ✨ 修改個人管理區按鈕
                             ra, rb, rc, rd, re = st.columns([2.5, 1.5, 0.8, 0.8, 0.8])
                             ra.write(f"📌 {r['作業名稱']}")
                             color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
@@ -1031,6 +1103,55 @@ elif menu == "🛠️ 老師專屬後台":
                 
                 if st.button("🗑️ 刪除最新一筆紀錄"):
                     st.session_state.salary_df = st.session_state.salary_df.drop(st.session_state.salary_df.index[-1])
+                    st.session_state.has_unsaved = True
+                    st.rerun()
+                    
+        # ✨ 新增：抽獎管理專區
+        with tab_lottery:
+            st.subheader("🎁 抽獎系統設定")
+            st.write("您可以在這裡自由設定要給孩子們的獎品，並調整抽中的機率！")
+            
+            c1, c2, c3 = st.columns([2, 1, 1])
+            c1.text_input("新增獎品名稱", key="new_prize_name", placeholder="例：免死金牌")
+            c2.number_input("機率權重", min_value=1, value=10, key="new_prize_weight", help="數字越大，越容易抽中喔！(例如100就比1容易抽中)")
+            c3.markdown("<br>", unsafe_allow_html=True)
+            c3.button("➕ 新增獎品", on_click=add_prize, use_container_width=True)
+
+            st.divider()
+            st.write("#### 🎯 目前獎品池與機率")
+            if not st.session_state.prizes_df.empty:
+                for i, r in st.session_state.prizes_df.iterrows():
+                    ca, cb, cc = st.columns([3, 2, 1])
+                    ca.write(f"🎁 **{r['獎品名稱']}**")
+                    cb.write(f"權重: {r['機率權重']}")
+                    if cc.button("刪除", key=f"del_prize_{i}"):
+                        st.session_state.prizes_df = st.session_state.prizes_df.drop(i).reset_index(drop=True)
+                        st.session_state.has_unsaved = True
+                        st.rerun()
+            else:
+                st.info("目前沒有設定任何獎品喔！如果學生現在抽獎，只會抽到「🍬 神秘小禮物」。")
+
+            st.divider()
+            st.write("#### 📜 學生抽獎紀錄追蹤")
+            if st.session_state.lottery_df.empty:
+                st.info("目前還沒有學生進行過抽獎喔！")
+            else:
+                # 反轉清單，讓最新抽獎的排在最上面
+                for i, r in reversed(list(st.session_state.lottery_df.iterrows())):
+                    col1, col2, col3 = st.columns([4, 2, 1])
+                    col1.write(f"🕒 {r['時間']} | **{r['座號']}. {r['姓名']}** 抽中：**{r['獲得獎品']}**")
+                    color = "red" if r['狀態'] == "未領取" else "green"
+                    col2.markdown(f":{color}[{r['狀態']}]")
+                    
+                    if r['狀態'] == "未領取":
+                        if col3.button("標記已領", key=f"claim_{i}"):
+                            st.session_state.lottery_df.at[i, "狀態"] = "已領取"
+                            st.session_state.has_unsaved = True
+                            st.rerun()
+                            
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("🗑️ 清空所有抽獎紀錄"):
+                    st.session_state.lottery_df = pd.DataFrame(columns=["時間", "座號", "姓名", "獲得獎品", "狀態"])
                     st.session_state.has_unsaved = True
                     st.rerun()
 
