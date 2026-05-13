@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import random
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-穩定防護版", layout="wide")
+st.set_page_config(page_title="303作業登記-專屬抽獎舞台版", layout="wide")
 
 st.markdown("""
 <style>
@@ -102,6 +102,10 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 [data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.0rem !important; overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricLabel"] { font-size: 1.2rem !important; white-space: normal !important; }
+
+/* ✨ 抽獎專屬大按鈕 */
+.btn-lottery > button { background-color: #FFD700 !important; color: #8B4500 !important; font-size: 1.8rem !important; padding: 20px !important; border-radius: 40px !important; border: 4px dashed #FFA500 !important; box-shadow: 0 10px 20px rgba(255, 215, 0, 0.5) !important; width: 100%;}
+.btn-lottery > button:hover { background-color: #FFA500 !important; color: #FFF !important; transform: scale(1.05) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -164,9 +168,7 @@ def clean_score(val):
 def load_data(sheet_name="Sheet1"):
     expected_cols = SHEET_COLUMNS.get(sheet_name, [])
     try:
-        # ✨ 關鍵修復：加入 ttl=30 的快取防護罩，避免 429 API 超載錯誤！
         df = conn.read(worksheet=sheet_name, ttl=30)
-        
         if df is None or df.empty:
             df = pd.DataFrame(columns=expected_cols)
         else:
@@ -189,7 +191,6 @@ def load_data(sheet_name="Sheet1"):
                 df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
         return df.reset_index(drop=True)
     except Exception as e:
-        # 若發生錯誤，回傳空表維持系統運作
         return pd.DataFrame(columns=expected_cols)
 
 def save_data_to_sheet(df, sheet_name):
@@ -401,7 +402,6 @@ def set_new_avatar(sid, emoji):
         st.session_state.has_unsaved = True
 
 def set_active_student(sid):
-    st.session_state.lucky_draw_result = None
     if st.session_state.selected_point_sid == sid:
         st.session_state.selected_point_sid = None
     else:
@@ -475,7 +475,8 @@ def get_student_status(pt_row, main_df, sid):
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-menu = st.sidebar.radio("請選擇功能：", ["📖 班級榮譽榜", "📊 作業待辦一覽", "📓 每日聯絡簿", "🔍 個人作業查詢", "👦 班長小幫手", "🛠️ 老師專屬後台"], key="main_menu")
+# ✨ 新增：🎁 抽獎兌換區 分頁
+menu = st.sidebar.radio("請選擇功能：", ["📖 班級榮譽榜", "📊 作業待辦一覽", "📓 每日聯絡簿", "🔍 個人作業查詢", "👦 班長小幫手", "🛠️ 老師專屬後台", "🎁 抽獎兌換區"], key="main_menu")
 
 st.sidebar.divider()
 pwd = st.sidebar.text_input("輸入密碼 (老師/班長專用)", type="password")
@@ -504,7 +505,6 @@ if is_admin or is_monitor:
 
 st.sidebar.markdown("<br><p style='font-size:0.85rem; color:#888;'>💡 提醒：為避免被 Google 阻擋，請勿一分鐘內連按更新喔！</p>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 重新載入最新資料"):
-    # ✨ 清除快取，確保能抓到雲端最新資料
     st.cache_data.clear()
     
     st.session_state.main_df = load_data("Sheet1")
@@ -676,17 +676,77 @@ elif menu == "👦 班長小幫手":
             st.markdown(f"### ⚡ 座號快填 - {target_hw}")
             
             ungraded_key_m = f"fu_m_{target_hw}"
-            st.text_input("🔵 快速標記【已交未改】(Enter送出)", key=ungraded_key_m, placeholder="例: 2,4", on_change=mark_fast, args=(target_hw, "已繳交未改", ungraded_key_m, False))
+            # ✨ 班長快填區：佔滿全寬，僅保留已交未改
+            st.text_input("🔵 快速標記【已交未改】(輸入座號後按 Enter 送出，例如: 1,3,5)", key=ungraded_key_m, on_change=mark_fast, args=(target_hw, "已繳交未改", ungraded_key_m, False))
 
             st.divider()
             
             m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
             for i, r in m.iterrows():
+                # ✨ 班長單筆區：調整寬度，僅保留未改(收件)按鈕
                 ca, cb, cc = st.columns([2, 1.5, 1])
                 ca.write(f"**{r['座號']}. {r['姓名']}**")
                 color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
                 cb.markdown(f":{color}[**{r['繳交狀態']}**]")
-                cc.button("收件 (未改)", key=f"u_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交未改"))
+                cc.button("收件 (未改)", key=f"u_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交未改"), use_container_width=True)
+
+# ✨ 全新的「🎁 抽獎兌換區」專屬畫面
+elif menu == "🎁 抽獎兌換區":
+    st.markdown("### 🎁 幸運大抽獎兌換區")
+    st.write("🎉 歡迎來到抽獎中心！請選擇要兌換的學生：")
+    
+    # 建立下拉選單選項
+    student_options = ["請選擇"] + [f"{s['座號']}. {s['姓名']}" for s in STUDENT_LIST]
+    
+    selected_student_str = st.selectbox("👉 第一步：請選擇學生", student_options)
+    
+    if selected_student_str != "請選擇":
+        sid = selected_student_str.split(".")[0]
+        name = selected_student_str.split(". ")[1]
+        emoji = get_animal_emoji(sid)
+        
+        stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sid)]
+        if not stu_filter.empty:
+            try: cards = int(float(stu_filter.iloc[0]['完美卡']))
+            except: cards = 0
+            
+            st.markdown(f"#### {emoji} {name} 擁有的完美卡： **{cards}** 張")
+            
+            if cards >= 1:
+                st.markdown('<div class="btn-lottery">', unsafe_allow_html=True)
+                st.button("🎁 第二步：扣除 1 張完美卡並馬上抽獎！", on_click=handle_card_redeem, args=(sid,), use_container_width=True)
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.warning("哎呀！這名學生的完美卡數量不足，還不能抽獎喔！請繼續加油！")
+
+    # 動畫顯示區域
+    if st.session_state.lucky_draw_result:
+        res = st.session_state.lucky_draw_result
+        if "error" in res:
+            st.error(res["error"])
+            if st.button("關閉提醒"):
+                st.session_state.lucky_draw_result = None
+                st.rerun()
+        else:
+            st.balloons()
+            st.markdown(f'''
+            <div style="background: linear-gradient(135deg, #FFD700, #FF8C00); padding: 40px; border-radius: 20px; text-align: center; color: white; margin-top: 30px; box-shadow: 0 10px 30px rgba(255,140,0,0.6); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+                <h3 style="color: white !important; margin:0; font-size: 2rem;">🎉 恭喜！完美卡兌換成功！ 🎉</h3>
+                <p style="font-size: 1.5rem; margin-top: 10px;">獲得了：</p>
+                <h1 style="color: #fff !important; font-size: 4.5rem; margin: 20px 0; text-shadow: 3px 3px 6px rgba(0,0,0,0.3);">{res['prize']}</h1>
+            </div>
+            <style>
+            @keyframes popIn {{
+                0% {{ transform: scale(0.5); opacity: 0; }}
+                100% {{ transform: scale(1); opacity: 1; }}
+            }}
+            </style>
+            ''', unsafe_allow_html=True)
+            
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("✅ 確認並關閉", key="close_draw", use_container_width=True):
+                st.session_state.lucky_draw_result = None
+                st.rerun()
 
 elif menu == "🛠️ 老師專屬後台":
     if not is_admin:
@@ -863,38 +923,13 @@ elif menu == "🛠️ 老師專屬後台":
 
                     st.markdown("<br>", unsafe_allow_html=True)
                     
+                    # ✨ 老師後台還原為單純的卡片數量管理，不含抽獎動畫
                     st.markdown("#### 🎫 完美卡管理")
                     st.markdown('<div class="btn-card">', unsafe_allow_html=True)
                     c1, c2 = st.columns(2)
                     c1.button("➕ 獲得 1 張完美卡", on_click=modify_perfect_card, args=(sel_sid, 1), use_container_width=True, key=f"card_add_{sel_sid}")
-                    c2.button("🎁 扣除次數 (兌換抽獎)", on_click=handle_card_redeem, args=(sel_sid,), use_container_width=True, key=f"card_sub_{sel_sid}")
+                    c2.button("➖ 手動扣除 1 張 (修改用)", on_click=modify_perfect_card, args=(sel_sid, -1), use_container_width=True, key=f"card_sub_{sel_sid}")
                     st.markdown('</div>', unsafe_allow_html=True)
-
-                    if st.session_state.lucky_draw_result:
-                        res = st.session_state.lucky_draw_result
-                        if res.get("sid") == sel_sid or "error" in res:
-                            if "error" in res:
-                                st.error(res["error"])
-                                if st.button("關閉提醒", key="close_err"):
-                                    st.session_state.lucky_draw_result = None
-                                    st.rerun()
-                            else:
-                                st.balloons()
-                                st.markdown(f'''
-                                <div style="background: linear-gradient(135deg, #FFD700, #FF8C00); padding: 25px; border-radius: 20px; text-align: center; color: white; margin-top: 15px; box-shadow: 0 8px 20px rgba(255,140,0,0.5); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
-                                    <h3 style="color: white !important; margin:0; font-size: 1.5rem;">🎉 完美卡兌換成功！幸運大抽獎 🎉</h3>
-                                    <h1 style="color: #fff !important; font-size: 3.5rem; margin: 15px 0; text-shadow: 2px 2px 4px rgba(0,0,0,0.2);">{res['prize']}</h1>
-                                </div>
-                                <style>
-                                @keyframes popIn {{
-                                    0% {{ transform: scale(0.5); opacity: 0; }}
-                                    100% {{ transform: scale(1); opacity: 1; }}
-                                }}
-                                </style>
-                                ''', unsafe_allow_html=True)
-                                if st.button("✅ 確認並關閉", key="close_draw", use_container_width=True):
-                                    st.session_state.lucky_draw_result = None
-                                    st.rerun()
 
                     st.markdown("<br>", unsafe_allow_html=True)
 
