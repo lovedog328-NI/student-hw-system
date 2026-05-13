@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import random
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-專屬抽獎舞台版", layout="wide")
+st.set_page_config(page_title="303作業登記-自動存檔抽獎版", layout="wide")
 
 st.markdown("""
 <style>
@@ -402,6 +402,7 @@ def set_new_avatar(sid, emoji):
         st.session_state.has_unsaved = True
 
 def set_active_student(sid):
+    st.session_state.lucky_draw_result = None
     if st.session_state.selected_point_sid == sid:
         st.session_state.selected_point_sid = None
     else:
@@ -475,7 +476,6 @@ def get_student_status(pt_row, main_df, sid):
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
-# ✨ 新增：🎁 抽獎兌換區 分頁
 menu = st.sidebar.radio("請選擇功能：", ["📖 班級榮譽榜", "📊 作業待辦一覽", "📓 每日聯絡簿", "🔍 個人作業查詢", "👦 班長小幫手", "🛠️ 老師專屬後台", "🎁 抽獎兌換區"], key="main_menu")
 
 st.sidebar.divider()
@@ -506,6 +506,7 @@ if is_admin or is_monitor:
 st.sidebar.markdown("<br><p style='font-size:0.85rem; color:#888;'>💡 提醒：為避免被 Google 阻擋，請勿一分鐘內連按更新喔！</p>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 重新載入最新資料"):
     st.cache_data.clear()
+    st.session_state.lucky_draw_result = None
     
     st.session_state.main_df = load_data("Sheet1")
     st.session_state.salary_df = load_data("Salary")
@@ -676,26 +677,22 @@ elif menu == "👦 班長小幫手":
             st.markdown(f"### ⚡ 座號快填 - {target_hw}")
             
             ungraded_key_m = f"fu_m_{target_hw}"
-            # ✨ 班長快填區：佔滿全寬，僅保留已交未改
             st.text_input("🔵 快速標記【已交未改】(輸入座號後按 Enter 送出，例如: 1,3,5)", key=ungraded_key_m, on_change=mark_fast, args=(target_hw, "已繳交未改", ungraded_key_m, False))
 
             st.divider()
             
             m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
             for i, r in m.iterrows():
-                # ✨ 班長單筆區：調整寬度，僅保留未改(收件)按鈕
                 ca, cb, cc = st.columns([2, 1.5, 1])
                 ca.write(f"**{r['座號']}. {r['姓名']}**")
                 color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
                 cb.markdown(f":{color}[**{r['繳交狀態']}**]")
                 cc.button("收件 (未改)", key=f"u_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交未改"), use_container_width=True)
 
-# ✨ 全新的「🎁 抽獎兌換區」專屬畫面
 elif menu == "🎁 抽獎兌換區":
     st.markdown("### 🎁 幸運大抽獎兌換區")
     st.write("🎉 歡迎來到抽獎中心！請選擇要兌換的學生：")
     
-    # 建立下拉選單選項
     student_options = ["請選擇"] + [f"{s['座號']}. {s['姓名']}" for s in STUDENT_LIST]
     
     selected_student_str = st.selectbox("👉 第一步：請選擇學生", student_options)
@@ -719,34 +716,51 @@ elif menu == "🎁 抽獎兌換區":
             else:
                 st.warning("哎呀！這名學生的完美卡數量不足，還不能抽獎喔！請繼續加油！")
 
-    # 動畫顯示區域
-    if st.session_state.lucky_draw_result:
-        res = st.session_state.lucky_draw_result
-        if "error" in res:
-            st.error(res["error"])
-            if st.button("關閉提醒"):
-                st.session_state.lucky_draw_result = None
-                st.rerun()
-        else:
-            st.balloons()
-            st.markdown(f'''
-            <div style="background: linear-gradient(135deg, #FFD700, #FF8C00); padding: 40px; border-radius: 20px; text-align: center; color: white; margin-top: 30px; box-shadow: 0 10px 30px rgba(255,140,0,0.6); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
-                <h3 style="color: white !important; margin:0; font-size: 2rem;">🎉 恭喜！完美卡兌換成功！ 🎉</h3>
-                <p style="font-size: 1.5rem; margin-top: 10px;">獲得了：</p>
-                <h1 style="color: #fff !important; font-size: 4.5rem; margin: 20px 0; text-shadow: 3px 3px 6px rgba(0,0,0,0.3);">{res['prize']}</h1>
-            </div>
-            <style>
-            @keyframes popIn {{
-                0% {{ transform: scale(0.5); opacity: 0; }}
-                100% {{ transform: scale(1); opacity: 1; }}
-            }}
-            </style>
-            ''', unsafe_allow_html=True)
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("✅ 確認並關閉", key="close_draw", use_container_width=True):
-                st.session_state.lucky_draw_result = None
-                st.rerun()
+        if st.session_state.lucky_draw_result:
+            res = st.session_state.lucky_draw_result
+            if res.get("sid") == sid or "error" in res:
+                if "error" in res:
+                    st.error(res["error"])
+                    if st.button("關閉提醒"):
+                        st.session_state.lucky_draw_result = None
+                        st.rerun()
+                else:
+                    st.balloons()
+                    st.markdown(f'''
+                    <div style="background: linear-gradient(135deg, #FFD700, #FF8C00); padding: 40px; border-radius: 20px; text-align: center; color: white; margin-top: 30px; box-shadow: 0 10px 30px rgba(255,140,0,0.6); animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+                        <h3 style="color: white !important; margin:0; font-size: 2rem;">🎉 恭喜！完美卡兌換成功！ 🎉</h3>
+                        <p style="font-size: 1.5rem; margin-top: 10px;">獲得了：</p>
+                        <h1 style="color: #fff !important; font-size: 4.5rem; margin: 20px 0; text-shadow: 3px 3px 6px rgba(0,0,0,0.3);">{res['prize']}</h1>
+                    </div>
+                    <style>
+                    @keyframes popIn {{
+                        0% {{ transform: scale(0.5); opacity: 0; }}
+                        100% {{ transform: scale(1); opacity: 1; }}
+                    }}
+                    </style>
+                    ''', unsafe_allow_html=True)
+                    
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    
+                    # ✨ 將自動存檔邏輯綁定在確認關閉按鈕上
+                    if st.button("✅ 確認並關閉", key="close_draw", use_container_width=True):
+                        # 背景自動執行儲存至雲端
+                        save_data_to_sheet(st.session_state.main_df, "Sheet1")
+                        save_data_to_sheet(st.session_state.salary_df, "Salary")
+                        save_data_to_sheet(st.session_state.reminder_df, "Reminders")
+                        save_data_to_sheet(st.session_state.contact_df, "ContactBook")
+                        save_data_to_sheet(st.session_state.points_df, "Points")
+                        save_data_to_sheet(st.session_state.rules_df, "Rules")
+                        save_data_to_sheet(st.session_state.prizes_df, "Prizes")
+                        save_data_to_sheet(st.session_state.lottery_df, "LotteryLogs")
+                        st.session_state.has_unsaved = False
+                        
+                        # 清除畫面暫存並重新載入
+                        st.session_state.lucky_draw_result = None
+                        st.rerun()
+    else:
+        if st.session_state.lucky_draw_result is not None:
+            st.session_state.lucky_draw_result = None
 
 elif menu == "🛠️ 老師專屬後台":
     if not is_admin:
@@ -923,7 +937,6 @@ elif menu == "🛠️ 老師專屬後台":
 
                     st.markdown("<br>", unsafe_allow_html=True)
                     
-                    # ✨ 老師後台還原為單純的卡片數量管理，不含抽獎動畫
                     st.markdown("#### 🎫 完美卡管理")
                     st.markdown('<div class="btn-card">', unsafe_allow_html=True)
                     c1, c2 = st.columns(2)
