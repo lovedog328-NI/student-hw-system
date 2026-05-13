@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import random
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-專業抽獎版", layout="wide")
+st.set_page_config(page_title="303作業登記-穩定防護版", layout="wide")
 
 st.markdown("""
 <style>
@@ -92,20 +92,8 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 .btn-free > button:hover { background-color: #008080 !important; }
 
 /* 貼紙牆專用的大按鈕 */
-.sticker-btn > button { 
-    font-size: 3.5rem !important; 
-    padding: 15px 0 !important;   
-    background-color: #ffffff !important; 
-    border: 2px dashed #FFB6C1 !important; 
-    color: #000 !important; 
-    box-shadow: none !important;
-}
-.sticker-btn > button:hover { 
-    background-color: #FFF0F5 !important; 
-    transform: scale(1.1) !important; 
-    border: 2px solid #FF69B4 !important;
-    z-index: 1; 
-}
+.sticker-btn > button { font-size: 3.5rem !important; padding: 15px 0 !important; background-color: #ffffff !important; border: 2px dashed #FFB6C1 !important; color: #000 !important; box-shadow: none !important;}
+.sticker-btn > button:hover { background-color: #FFF0F5 !important; transform: scale(1.1) !important; border: 2px solid #FF69B4 !important; z-index: 1; }
 
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
@@ -176,7 +164,9 @@ def clean_score(val):
 def load_data(sheet_name="Sheet1"):
     expected_cols = SHEET_COLUMNS.get(sheet_name, [])
     try:
-        df = conn.read(worksheet=sheet_name, ttl=0)
+        # ✨ 關鍵修復：加入 ttl=30 的快取防護罩，避免 429 API 超載錯誤！
+        df = conn.read(worksheet=sheet_name, ttl=30)
+        
         if df is None or df.empty:
             df = pd.DataFrame(columns=expected_cols)
         else:
@@ -198,7 +188,8 @@ def load_data(sheet_name="Sheet1"):
             for s in STUDENT_LIST:
                 df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
         return df.reset_index(drop=True)
-    except:
+    except Exception as e:
+        # 若發生錯誤，回傳空表維持系統運作
         return pd.DataFrame(columns=expected_cols)
 
 def save_data_to_sheet(df, sheet_name):
@@ -511,7 +502,11 @@ if is_admin or is_monitor:
     else:
         st.sidebar.success("✔️ 雲端資料已同步")
 
+st.sidebar.markdown("<br><p style='font-size:0.85rem; color:#888;'>💡 提醒：為避免被 Google 阻擋，請勿一分鐘內連按更新喔！</p>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 重新載入最新資料"):
+    # ✨ 清除快取，確保能抓到雲端最新資料
+    st.cache_data.clear()
+    
     st.session_state.main_df = load_data("Sheet1")
     st.session_state.salary_df = load_data("Salary")
     st.session_state.reminder_df = load_data("Reminders")
@@ -680,7 +675,6 @@ elif menu == "👦 班長小幫手":
         if target_hw != "請選擇":
             st.markdown(f"### ⚡ 座號快填 - {target_hw}")
             
-            # ✨ 移除已繳交按鈕，只保留「已交未改」
             ungraded_key_m = f"fu_m_{target_hw}"
             st.text_input("🔵 快速標記【已交未改】(Enter送出)", key=ungraded_key_m, placeholder="例: 2,4", on_change=mark_fast, args=(target_hw, "已繳交未改", ungraded_key_m, False))
 
@@ -688,7 +682,6 @@ elif menu == "👦 班長小幫手":
             
             m = st.session_state.main_df[st.session_state.main_df["作業名稱"] == target_hw]
             for i, r in m.iterrows():
-                # ✨ 調整比例，只保留「收件(未改)」按鈕
                 ca, cb, cc = st.columns([2, 1.5, 1])
                 ca.write(f"**{r['座號']}. {r['姓名']}**")
                 color = 'red' if r['繳交狀態'] == '需訂正' else ('blue' if r['繳交狀態'] == '已繳交未改' else ('orange' if r['繳交狀態'] == '未繳交' else 'green'))
