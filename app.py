@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import random
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-自動存檔抽獎版", layout="wide")
+st.set_page_config(page_title="303作業登記-完美防護版", layout="wide")
 
 st.markdown("""
 <style>
@@ -125,6 +125,14 @@ ANIMAL_EMOJIS = [
     "🦩", "🦤", "🦖", "🦕", "🦝", "🦨", "🐕", "🐈", "🐓", "🦃"
 ]
 
+# ✨ 預設獎品池
+DEFAULT_PRIZES = [
+    {"獎品名稱": "🍬 糖果一顆", "機率權重": "100"},
+    {"獎品名稱": "📝 免寫一項小作業", "機率權重": "10"},
+    {"獎品名稱": "⏱️ 下課提早 3 分鐘", "機率權重": "30"},
+    {"獎品名稱": "👑 榮譽小幫手一次", "機率權重": "50"}
+]
+
 def get_animal_emoji(sid):
     try:
         if 'points_df' in st.session_state and not st.session_state.points_df.empty:
@@ -170,10 +178,10 @@ def load_data(sheet_name="Sheet1"):
     try:
         df = conn.read(worksheet=sheet_name, ttl=30)
         if df is None or df.empty:
-            df = pd.DataFrame(columns=expected_cols)
-        else:
-            for col in expected_cols:
-                if col not in df.columns: df[col] = ""
+            return pd.DataFrame(columns=expected_cols)
+            
+        for col in expected_cols:
+            if col not in df.columns: df[col] = ""
         
         df = df.fillna("")
         df = df.astype(str).replace('nan', '')
@@ -191,7 +199,8 @@ def load_data(sheet_name="Sheet1"):
                 df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
         return df.reset_index(drop=True)
     except Exception as e:
-        return pd.DataFrame(columns=expected_cols)
+        # ✨ 關鍵修復：如果 API 限制報錯，直接回傳 None，不偽裝成空資料表！
+        return None
 
 def save_data_to_sheet(df, sheet_name):
     try:
@@ -213,27 +222,28 @@ def save_data_to_sheet(df, sheet_name):
 
 # --- 3. 系統暫存初始化 ---
 for key, s_name in [('main_df', 'Sheet1'), ('salary_df', 'Salary'), ('reminder_df', 'Reminders'), ('contact_df', 'ContactBook'), ('rules_df', 'Rules'), ('prizes_df', 'Prizes'), ('lottery_df', 'LotteryLogs')]:
-    if key not in st.session_state: st.session_state[key] = load_data(s_name)
+    if key not in st.session_state: 
+        res = load_data(s_name)
+        st.session_state[key] = res if res is not None else pd.DataFrame(columns=SHEET_COLUMNS[s_name])
 
 if st.session_state.prizes_df.empty:
-    default_prizes = [
-        {"獎品名稱": "🍬 糖果一顆", "機率權重": "100"},
-        {"獎品名稱": "📝 免寫一項小作業", "機率權重": "10"},
-        {"獎品名稱": "⏱️ 下課提早 3 分鐘", "機率權重": "30"},
-        {"獎品名稱": "👑 榮譽小幫手一次", "機率權重": "50"}
-    ]
-    st.session_state.prizes_df = pd.DataFrame(default_prizes)
+    st.session_state.prizes_df = pd.DataFrame(DEFAULT_PRIZES)
 
 if 'points_df' not in st.session_state: 
     temp_pdf = load_data("Points")
-    if temp_pdf.empty:
+    # 如果正常回傳空的，才初始化為 0
+    if temp_pdf is not None and temp_pdf.empty:
         new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST]
-        temp_pdf = pd.DataFrame(new_pts)
-    else:
+        st.session_state.points_df = pd.DataFrame(new_pts).astype(str)
+    elif temp_pdf is not None:
         if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
         if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
         if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
-    st.session_state.points_df = temp_pdf.astype(str)
+        st.session_state.points_df = temp_pdf.astype(str)
+    else:
+        # 即使連線失敗，先隨便建一個空的以免系統當機
+        new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST]
+        st.session_state.points_df = pd.DataFrame(new_pts).astype(str)
 
 if 'has_unsaved' not in st.session_state: st.session_state.has_unsaved = False
 if 'selected_hw_base' not in st.session_state: st.session_state.selected_hw_base = "請選擇"
@@ -473,6 +483,11 @@ def get_student_status(pt_row, main_df, sid):
     else:
         return False, "\n".join(status_parts)
 
+def safe_update_state(key, sheet_name):
+    df = load_data(sheet_name)
+    if df is not None:
+        st.session_state[key] = df
+
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
@@ -505,28 +520,40 @@ if is_admin or is_monitor:
 
 st.sidebar.markdown("<br><p style='font-size:0.85rem; color:#888;'>💡 提醒：為避免被 Google 阻擋，請勿一分鐘內連按更新喔！</p>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 重新載入最新資料"):
-    st.cache_data.clear()
-    st.session_state.lucky_draw_result = None
-    
-    st.session_state.main_df = load_data("Sheet1")
-    st.session_state.salary_df = load_data("Salary")
-    st.session_state.reminder_df = load_data("Reminders")
-    st.session_state.contact_df = load_data("ContactBook")
-    st.session_state.rules_df = load_data("Rules")
-    st.session_state.prizes_df = load_data("Prizes")
-    st.session_state.lottery_df = load_data("LotteryLogs")
-    
-    temp_pdf = load_data("Points")
-    if temp_pdf.empty:
-        temp_pdf = pd.DataFrame([{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST])
+    if st.session_state.has_unsaved:
+        st.sidebar.warning("⚠️ 您有未儲存的資料！請先點擊上方「儲存並同步」，否則資料會遺失喔！")
     else:
-        if "完美卡" not in temp_pdf.columns: temp_pdf["完美卡"] = "0"
-        if "頭像" not in temp_pdf.columns: temp_pdf["頭像"] = ""
-        if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
-    st.session_state.points_df = temp_pdf.astype(str)
-    
-    st.session_state.has_unsaved = False
-    st.rerun()
+        st.cache_data.clear()
+        st.session_state.lucky_draw_result = None
+        
+        # ✨ 安全讀取：先讀點數表，測試 API 是否阻擋
+        test_pdf = load_data("Points")
+        
+        if test_pdf is None:
+            st.sidebar.error("🚨 讀取失敗：操作太頻繁被系統阻擋，為了保護您的資料，請等待 1 分鐘後再重試！")
+        else:
+            safe_update_state('main_df', 'Sheet1')
+            safe_update_state('salary_df', 'Salary')
+            safe_update_state('reminder_df', 'Reminders')
+            safe_update_state('contact_df', 'ContactBook')
+            safe_update_state('rules_df', 'Rules')
+            safe_update_state('lottery_df', 'LotteryLogs')
+            
+            p_df = load_data("Prizes")
+            if p_df is not None:
+                st.session_state.prizes_df = p_df if not p_df.empty else pd.DataFrame(DEFAULT_PRIZES)
+            
+            if test_pdf.empty:
+                new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST]
+                test_pdf = pd.DataFrame(new_pts).astype(str)
+            else:
+                if "完美卡" not in test_pdf.columns: test_pdf["完美卡"] = "0"
+                if "頭像" not in test_pdf.columns: test_pdf["頭像"] = ""
+                if "懲罰結束日期" not in test_pdf.columns: test_pdf["懲罰結束日期"] = ""
+            
+            st.session_state.points_df = test_pdf.astype(str)
+            st.session_state.has_unsaved = False
+            st.rerun()
 
 # --- 6. 主畫面 UI ---
 
@@ -742,9 +769,7 @@ elif menu == "🎁 抽獎兌換區":
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     
-                    # ✨ 將自動存檔邏輯綁定在確認關閉按鈕上
                     if st.button("✅ 確認並關閉", key="close_draw", use_container_width=True):
-                        # 背景自動執行儲存至雲端
                         save_data_to_sheet(st.session_state.main_df, "Sheet1")
                         save_data_to_sheet(st.session_state.salary_df, "Salary")
                         save_data_to_sheet(st.session_state.reminder_df, "Reminders")
@@ -755,7 +780,6 @@ elif menu == "🎁 抽獎兌換區":
                         save_data_to_sheet(st.session_state.lottery_df, "LotteryLogs")
                         st.session_state.has_unsaved = False
                         
-                        # 清除畫面暫存並重新載入
                         st.session_state.lucky_draw_result = None
                         st.rerun()
     else:
