@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import random
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-完美防護版", layout="wide")
+st.set_page_config(page_title="303作業登記-頭像抽獎版", layout="wide")
 
 st.markdown("""
 <style>
@@ -199,7 +199,6 @@ def load_data(sheet_name="Sheet1"):
                 df.loc[df["座號"] == s["座號"], "姓名"] = s["姓名"]
         return df.reset_index(drop=True)
     except Exception as e:
-        # ✨ 關鍵修復：如果 API 限制報錯，直接回傳 None，不偽裝成空資料表！
         return None
 
 def save_data_to_sheet(df, sheet_name):
@@ -231,7 +230,6 @@ if st.session_state.prizes_df.empty:
 
 if 'points_df' not in st.session_state: 
     temp_pdf = load_data("Points")
-    # 如果正常回傳空的，才初始化為 0
     if temp_pdf is not None and temp_pdf.empty:
         new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST]
         st.session_state.points_df = pd.DataFrame(new_pts).astype(str)
@@ -241,7 +239,6 @@ if 'points_df' not in st.session_state:
         if "懲罰結束日期" not in temp_pdf.columns: temp_pdf["懲罰結束日期"] = ""
         st.session_state.points_df = temp_pdf.astype(str)
     else:
-        # 即使連線失敗，先隨便建一個空的以免系統當機
         new_pts = [{"座號": s['座號'], "姓名": s['姓名'], "總積點": "0", "完美卡": "0", "頭像": "", "懲罰結束日期": ""} for s in STUDENT_LIST]
         st.session_state.points_df = pd.DataFrame(new_pts).astype(str)
 
@@ -258,6 +255,9 @@ if "new_rule_name" not in st.session_state: st.session_state.new_rule_name = ""
 if "new_rule_pt" not in st.session_state: st.session_state.new_rule_pt = 1
 if "new_prize_name" not in st.session_state: st.session_state.new_prize_name = ""
 if "lucky_draw_result" not in st.session_state: st.session_state.lucky_draw_result = None
+
+# ✨ 新增：記錄當前選擇抽獎學生的變數
+if "selected_lottery_sid" not in st.session_state: st.session_state.selected_lottery_sid = None
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -356,7 +356,7 @@ def handle_card_redeem(sid):
             st.session_state.lottery_df = pd.concat([st.session_state.lottery_df, new_log], ignore_index=True)
             
             st.session_state.lucky_draw_result = {
-                "sid": sid,
+                "sid": str(sid),
                 "prize": won_prize
             }
         else:
@@ -412,7 +412,6 @@ def set_new_avatar(sid, emoji):
         st.session_state.has_unsaved = True
 
 def set_active_student(sid):
-    st.session_state.lucky_draw_result = None
     if st.session_state.selected_point_sid == sid:
         st.session_state.selected_point_sid = None
     else:
@@ -488,6 +487,15 @@ def safe_update_state(key, sheet_name):
     if df is not None:
         st.session_state[key] = df
 
+# ✨ 新增：處理抽獎舞台選擇學生的 Callback 函數
+def set_lottery_student(sid):
+    # 切換學生時，強制清除上一次的抽獎結果畫面
+    st.session_state.lucky_draw_result = None
+    if st.session_state.selected_lottery_sid == str(sid):
+        st.session_state.selected_lottery_sid = None
+    else:
+        st.session_state.selected_lottery_sid = str(sid)
+
 # --- 5. 側邊欄 ---
 st.sidebar.title("⚙️ 選單與功能")
 
@@ -525,8 +533,9 @@ if st.sidebar.button("🔄 重新載入最新資料"):
     else:
         st.cache_data.clear()
         st.session_state.lucky_draw_result = None
+        # ✨ 清除抽獎選取狀態
+        st.session_state.selected_lottery_sid = None
         
-        # ✨ 安全讀取：先讀點數表，測試 API 是否阻擋
         test_pdf = load_data("Points")
         
         if test_pdf is None:
@@ -718,15 +727,30 @@ elif menu == "👦 班長小幫手":
 
 elif menu == "🎁 抽獎兌換區":
     st.markdown("### 🎁 幸運大抽獎兌換區")
-    st.write("🎉 歡迎來到抽獎中心！請選擇要兌換的學生：")
+    st.write("🎉 歡迎來到抽獎中心！👉 **第一步：請點擊下方的頭像選擇要兌換的學生**")
     
-    student_options = ["請選擇"] + [f"{s['座號']}. {s['姓名']}" for s in STUDENT_LIST]
+    # ✨ 第一步：顯示全班學生頭像按鈕網格
+    sorted_pts = st.session_state.points_df.sort_values(by="座號", key=lambda x: pd.to_numeric(x, errors='coerce'))
+    grid_cols = st.columns(4)
     
-    selected_student_str = st.selectbox("👉 第一步：請選擇學生", student_options)
+    for idx, row in sorted_pts.iterrows():
+        sid = row["座號"]
+        name = row["姓名"]
+        emoji = get_animal_emoji(sid)
+        
+        with grid_cols[idx % 4]:
+            btn_text = f"{emoji} {sid}. {name}"
+            # 判斷是否為目前選取的學生，如果是就改變顏色高亮顯示
+            btn_type = "primary" if st.session_state.selected_lottery_sid == str(sid) else "secondary"
+            st.button(btn_text, key=f"lottery_stu_{sid}", on_click=set_lottery_student, args=(sid,), type=btn_type, use_container_width=True)
     
-    if selected_student_str != "請選擇":
-        sid = selected_student_str.split(".")[0]
-        name = selected_student_str.split(". ")[1]
+    st.divider()
+
+    # ✨ 第二步：顯示所選學生的抽獎資訊
+    if st.session_state.selected_lottery_sid:
+        sid = st.session_state.selected_lottery_sid
+        # 尋找對應的姓名與頭像
+        name = next((s["姓名"] for s in STUDENT_LIST if str(s["座號"]) == str(sid)), "")
         emoji = get_animal_emoji(sid)
         
         stu_filter = st.session_state.points_df[st.session_state.points_df["座號"].astype(str) == str(sid)]
@@ -734,7 +758,7 @@ elif menu == "🎁 抽獎兌換區":
             try: cards = int(float(stu_filter.iloc[0]['完美卡']))
             except: cards = 0
             
-            st.markdown(f"#### {emoji} {name} 擁有的完美卡： **{cards}** 張")
+            st.markdown(f"#### 正在為 {emoji} **{name}** 進行兌換 ｜ 擁有的完美卡： **{cards}** 張")
             
             if cards >= 1:
                 st.markdown('<div class="btn-lottery">', unsafe_allow_html=True)
@@ -743,9 +767,10 @@ elif menu == "🎁 抽獎兌換區":
             else:
                 st.warning("哎呀！這名學生的完美卡數量不足，還不能抽獎喔！請繼續加油！")
 
+        # 顯示抽獎結果動畫
         if st.session_state.lucky_draw_result:
             res = st.session_state.lucky_draw_result
-            if res.get("sid") == sid or "error" in res:
+            if res.get("sid") == str(sid) or "error" in res:
                 if "error" in res:
                     st.error(res["error"])
                     if st.button("關閉提醒"):
@@ -781,10 +806,9 @@ elif menu == "🎁 抽獎兌換區":
                         st.session_state.has_unsaved = False
                         
                         st.session_state.lucky_draw_result = None
+                        # ✨ 關閉後，自動取消選取學生，準備下一次抽獎
+                        st.session_state.selected_lottery_sid = None
                         st.rerun()
-    else:
-        if st.session_state.lucky_draw_result is not None:
-            st.session_state.lucky_draw_result = None
 
 elif menu == "🛠️ 老師專屬後台":
     if not is_admin:
