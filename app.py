@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import random
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-頭像抽獎版", layout="wide")
+st.set_page_config(page_title="303作業登記-版面優化版", layout="wide")
 
 st.markdown("""
 <style>
@@ -97,7 +97,9 @@ button[data-baseweb="tab"][aria-selected="true"] { background-color: #FFF0F5 !im
 
 .contact-book-box { background-color: #F0F8FF; border-left: 12px solid #87CEEB; padding: 25px; border-radius: 20px; box-shadow: 0 8px 16px rgba(135, 206, 235, 0.2); margin-top: 20px; }
 .contact-book-box h3 { margin-top: 0; color: #4682B4; font-weight: 700;}
-.contact-book-box p { font-size: 1.3rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
+
+/* ✨ 聯絡簿內容字體放大 (從 1.3rem -> 1.8rem) */
+.contact-book-box p { font-size: 1.8rem; color: #4682B4; font-weight: 700; white-space: pre-wrap; line-height: 1.6;}
 
 [data-testid="stMetricValue"] { color: #FF69B4 !important; font-size: 2.0rem !important; overflow: visible !important; white-space: normal !important; }
 [data-testid="stMetricValue"] > div { overflow: visible !important; white-space: normal !important; }
@@ -256,7 +258,6 @@ if "new_rule_pt" not in st.session_state: st.session_state.new_rule_pt = 1
 if "new_prize_name" not in st.session_state: st.session_state.new_prize_name = ""
 if "lucky_draw_result" not in st.session_state: st.session_state.lucky_draw_result = None
 
-# ✨ 新增：記錄當前選擇抽獎學生的變數
 if "selected_lottery_sid" not in st.session_state: st.session_state.selected_lottery_sid = None
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
@@ -487,9 +488,7 @@ def safe_update_state(key, sheet_name):
     if df is not None:
         st.session_state[key] = df
 
-# ✨ 新增：處理抽獎舞台選擇學生的 Callback 函數
 def set_lottery_student(sid):
-    # 切換學生時，強制清除上一次的抽獎結果畫面
     st.session_state.lucky_draw_result = None
     if st.session_state.selected_lottery_sid == str(sid):
         st.session_state.selected_lottery_sid = None
@@ -533,7 +532,6 @@ if st.sidebar.button("🔄 重新載入最新資料"):
     else:
         st.cache_data.clear()
         st.session_state.lucky_draw_result = None
-        # ✨ 清除抽獎選取狀態
         st.session_state.selected_lottery_sid = None
         
         test_pdf = load_data("Points")
@@ -729,7 +727,6 @@ elif menu == "🎁 抽獎兌換區":
     st.markdown("### 🎁 幸運大抽獎兌換區")
     st.write("🎉 歡迎來到抽獎中心！👉 **第一步：請點擊下方的頭像選擇要兌換的學生**")
     
-    # ✨ 第一步：顯示全班學生頭像按鈕網格
     sorted_pts = st.session_state.points_df.sort_values(by="座號", key=lambda x: pd.to_numeric(x, errors='coerce'))
     grid_cols = st.columns(4)
     
@@ -740,16 +737,13 @@ elif menu == "🎁 抽獎兌換區":
         
         with grid_cols[idx % 4]:
             btn_text = f"{emoji} {sid}. {name}"
-            # 判斷是否為目前選取的學生，如果是就改變顏色高亮顯示
             btn_type = "primary" if st.session_state.selected_lottery_sid == str(sid) else "secondary"
             st.button(btn_text, key=f"lottery_stu_{sid}", on_click=set_lottery_student, args=(sid,), type=btn_type, use_container_width=True)
     
     st.divider()
 
-    # ✨ 第二步：顯示所選學生的抽獎資訊
     if st.session_state.selected_lottery_sid:
         sid = st.session_state.selected_lottery_sid
-        # 尋找對應的姓名與頭像
         name = next((s["姓名"] for s in STUDENT_LIST if str(s["座號"]) == str(sid)), "")
         emoji = get_animal_emoji(sid)
         
@@ -767,7 +761,6 @@ elif menu == "🎁 抽獎兌換區":
             else:
                 st.warning("哎呀！這名學生的完美卡數量不足，還不能抽獎喔！請繼續加油！")
 
-        # 顯示抽獎結果動畫
         if st.session_state.lucky_draw_result:
             res = st.session_state.lucky_draw_result
             if res.get("sid") == str(sid) or "error" in res:
@@ -795,20 +788,15 @@ elif menu == "🎁 抽獎兌換區":
                     st.markdown("<br>", unsafe_allow_html=True)
                     
                     if st.button("✅ 確認並關閉", key="close_draw", use_container_width=True):
-                        save_data_to_sheet(st.session_state.main_df, "Sheet1")
-                        save_data_to_sheet(st.session_state.salary_df, "Salary")
-                        save_data_to_sheet(st.session_state.reminder_df, "Reminders")
-                        save_data_to_sheet(st.session_state.contact_df, "ContactBook")
                         save_data_to_sheet(st.session_state.points_df, "Points")
-                        save_data_to_sheet(st.session_state.rules_df, "Rules")
-                        save_data_to_sheet(st.session_state.prizes_df, "Prizes")
                         save_data_to_sheet(st.session_state.lottery_df, "LotteryLogs")
-                        st.session_state.has_unsaved = False
                         
                         st.session_state.lucky_draw_result = None
-                        # ✨ 關閉後，自動取消選取學生，準備下一次抽獎
                         st.session_state.selected_lottery_sid = None
                         st.rerun()
+    else:
+        if st.session_state.lucky_draw_result is not None:
+            st.session_state.lucky_draw_result = None
 
 elif menu == "🛠️ 老師專屬後台":
     if not is_admin:
@@ -1221,17 +1209,18 @@ elif menu == "🛠️ 老師專屬後台":
             if st.session_state.lottery_df.empty:
                 st.info("目前還沒有學生進行過抽獎喔！")
             else:
+                # ✨ 新增：單行極簡版抽獎紀錄顯示
                 for i, r in reversed(list(st.session_state.lottery_df.iterrows())):
-                    col1, col2, col3 = st.columns([4, 2, 1])
-                    col1.write(f"🕒 {r['時間']} | **{r['座號']}. {r['姓名']}** 抽中：**{r['獲得獎品']}**")
-                    color = "red" if r['狀態'] == "未領取" else "green"
-                    col2.markdown(f":{color}[{r['狀態']}]")
+                    col1, col2 = st.columns([4, 1])
+                    col1.markdown(f"🕒 {r['時間']} | **{r['座號']}. {r['姓名']}** 抽中：**{r['獲得獎品']}**")
                     
                     if r['狀態'] == "未領取":
-                        if col3.button("標記已領", key=f"claim_{i}"):
+                        if col2.button("⭕ 點此標記領取", key=f"claim_{i}", use_container_width=True):
                             st.session_state.lottery_df.at[i, "狀態"] = "已領取"
                             st.session_state.has_unsaved = True
                             st.rerun()
+                    else:
+                        col2.markdown("✅ :green[**已領取**]")
                             
                 st.markdown("<br>", unsafe_allow_html=True)
                 if st.button("🗑️ 清空所有抽獎紀錄"):
