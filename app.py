@@ -3,9 +3,10 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date, datetime, timedelta
 import random
+import time  # ✨ 新增：用來計算冷卻時間的計時套件
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
-st.set_page_config(page_title="303作業登記-安全上鎖版", layout="wide")
+st.set_page_config(page_title="303作業登記-專業冷卻版", layout="wide")
 
 st.markdown("""
 <style>
@@ -261,8 +262,10 @@ if "new_prize_name" not in st.session_state: st.session_state.new_prize_name = "
 if "lucky_draw_result" not in st.session_state: st.session_state.lucky_draw_result = None
 if "selected_lottery_sid" not in st.session_state: st.session_state.selected_lottery_sid = None
 
-# ✨ 新增：保護抽獎區的開關暫存狀態
 if "lottery_open" not in st.session_state: st.session_state.lottery_open = False
+
+# ✨ 新增：記錄上一次存檔時間的暫存變數
+if 'last_save_time' not in st.session_state: st.session_state.last_save_time = 0.0
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
 def clean_seat_input(val_str):
@@ -513,23 +516,36 @@ is_monitor = (pwd == "303")
 if is_admin or is_monitor:
     if st.session_state.has_unsaved:
         st.sidebar.error("🚨 資料尚未同步至雲端")
-        if st.sidebar.button("💾 儲存並同步", type="primary", use_container_width=True):
-            save_data_to_sheet(st.session_state.main_df, "Sheet1")
-            save_data_to_sheet(st.session_state.salary_df, "Salary")
-            save_data_to_sheet(st.session_state.reminder_df, "Reminders")
-            save_data_to_sheet(st.session_state.contact_df, "ContactBook")
-            save_data_to_sheet(st.session_state.points_df, "Points")
-            save_data_to_sheet(st.session_state.rules_df, "Rules")
-            save_data_to_sheet(st.session_state.prizes_df, "Prizes")
-            save_data_to_sheet(st.session_state.lottery_df, "LotteryLogs")
-            
-            st.session_state.has_unsaved = False
-            st.sidebar.success("✅ 已存檔")
-            st.rerun()
+        
+        # ✨ 新增：智慧冷卻系統計算
+        current_time = time.time()
+        elapsed = current_time - st.session_state.get('last_save_time', 0.0)
+        cooldown_sec = 30.0
+        
+        if elapsed < cooldown_sec:
+            remaining = int(cooldown_sec - elapsed)
+            st.sidebar.warning(f"⏳ 雲端同步冷卻中... 請等候 {remaining} 秒")
+            # 按鈕設定為不可點擊 (disabled=True)
+            st.sidebar.button("💾 儲存並同步", type="primary", disabled=True, use_container_width=True)
+        else:
+            if st.sidebar.button("💾 儲存並同步", type="primary", use_container_width=True):
+                save_data_to_sheet(st.session_state.main_df, "Sheet1")
+                save_data_to_sheet(st.session_state.salary_df, "Salary")
+                save_data_to_sheet(st.session_state.reminder_df, "Reminders")
+                save_data_to_sheet(st.session_state.contact_df, "ContactBook")
+                save_data_to_sheet(st.session_state.points_df, "Points")
+                save_data_to_sheet(st.session_state.rules_df, "Rules")
+                save_data_to_sheet(st.session_state.prizes_df, "Prizes")
+                save_data_to_sheet(st.session_state.lottery_df, "LotteryLogs")
+                
+                # 更新最後存檔時間，啟動冷卻
+                st.session_state.last_save_time = time.time()
+                st.session_state.has_unsaved = False
+                st.sidebar.success("✅ 已存檔")
+                st.rerun()
     else:
         st.sidebar.success("✔️ 雲端資料已同步")
 
-st.sidebar.markdown("<br><p style='font-size:0.85rem; color:#888;'>💡 提醒：為避免被 Google 阻擋，請勿一分鐘內連按更新喔！</p>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 重新載入最新資料"):
     if st.session_state.has_unsaved:
         st.sidebar.warning("⚠️ 您有未儲存的資料！請先點擊上方「儲存並同步」，否則資料會遺失喔！")
@@ -727,11 +743,9 @@ elif menu == "👦 班長小幫手":
                 cb.markdown(f":{color}[**{r['繳交狀態']}**]")
                 cc.button("收件 (未改)", key=f"u_m_{target_hw}_{i}", on_click=update_single_status, args=(i, "已繳交未改"), use_container_width=True)
 
-# ✨ 抽獎兌換區加入上鎖機制判斷
 elif menu == "🎁 抽獎兌換區":
     st.markdown("### 🎁 幸運大抽獎兌換區")
     
-    # 判斷大門是否開啟
     if not st.session_state.get("lottery_open", False):
         st.markdown('''
         <div class="locked-screen">
@@ -1196,7 +1210,6 @@ elif menu == "🛠️ 老師專屬後台":
         with tab_lottery:
             st.subheader("🎁 抽獎系統設定")
             
-            # ✨ 新增：抽獎開關
             st.markdown("#### 🔒 抽獎大門開關")
             st.session_state.lottery_open = st.checkbox("🔓 打勾以開放學生抽獎", value=st.session_state.get('lottery_open', False))
             if st.session_state.lottery_open:
