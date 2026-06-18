@@ -3,7 +3,7 @@ from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 from datetime import date, datetime, timedelta
 import random
-import time  # ✨ 新增：用來計算冷卻時間的計時套件
+import time
 
 # --- 1. 基本設定與 🎀 可愛手帳 & 圓胖數字風 CSS ---
 st.set_page_config(page_title="303作業登記-專業冷卻版", layout="wide")
@@ -260,11 +260,9 @@ if "new_rule_name" not in st.session_state: st.session_state.new_rule_name = ""
 if "new_rule_pt" not in st.session_state: st.session_state.new_rule_pt = 1
 if "new_prize_name" not in st.session_state: st.session_state.new_prize_name = ""
 if "lucky_draw_result" not in st.session_state: st.session_state.lucky_draw_result = None
+
 if "selected_lottery_sid" not in st.session_state: st.session_state.selected_lottery_sid = None
-
 if "lottery_open" not in st.session_state: st.session_state.lottery_open = False
-
-# ✨ 新增：記錄上一次存檔時間的暫存變數
 if 'last_save_time' not in st.session_state: st.session_state.last_save_time = 0.0
 
 # --- 4. Callbacks (不閃爍更新邏輯) ---
@@ -517,7 +515,6 @@ if is_admin or is_monitor:
     if st.session_state.has_unsaved:
         st.sidebar.error("🚨 資料尚未同步至雲端")
         
-        # ✨ 新增：智慧冷卻系統計算
         current_time = time.time()
         elapsed = current_time - st.session_state.get('last_save_time', 0.0)
         cooldown_sec = 30.0
@@ -525,7 +522,6 @@ if is_admin or is_monitor:
         if elapsed < cooldown_sec:
             remaining = int(cooldown_sec - elapsed)
             st.sidebar.warning(f"⏳ 雲端同步冷卻中... 請等候 {remaining} 秒")
-            # 按鈕設定為不可點擊 (disabled=True)
             st.sidebar.button("💾 儲存並同步", type="primary", disabled=True, use_container_width=True)
         else:
             if st.sidebar.button("💾 儲存並同步", type="primary", use_container_width=True):
@@ -538,7 +534,6 @@ if is_admin or is_monitor:
                 save_data_to_sheet(st.session_state.prizes_df, "Prizes")
                 save_data_to_sheet(st.session_state.lottery_df, "LotteryLogs")
                 
-                # 更新最後存檔時間，啟動冷卻
                 st.session_state.last_save_time = time.time()
                 st.session_state.has_unsaved = False
                 st.sidebar.success("✅ 已存檔")
@@ -546,6 +541,7 @@ if is_admin or is_monitor:
     else:
         st.sidebar.success("✔️ 雲端資料已同步")
 
+st.sidebar.markdown("<br><p style='font-size:0.85rem; color:#888;'>💡 提醒：為避免被 Google 阻擋，請勿一分鐘內連按更新喔！</p>", unsafe_allow_html=True)
 if st.sidebar.button("🔄 重新載入最新資料"):
     if st.session_state.has_unsaved:
         st.sidebar.warning("⚠️ 您有未儲存的資料！請先點擊上方「儲存並同步」，否則資料會遺失喔！")
@@ -848,7 +844,8 @@ elif menu == "🛠️ 老師專屬後台":
                 list_html = "".join([f"<li>📌 {item}</li>" for item in active_rems])
                 st.markdown(f'<div class="today-alert"><h3>🚨 今日重要提醒</h3><ul>{list_html}</ul></div>', unsafe_allow_html=True)
 
-        tab_remind, tab_points, tab_contact, tab1, tab2, tab_line, tab3, tab_money, tab_lottery = st.tabs(["📌 提醒", "🌟 點數與完美卡", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資", "🎁 抽獎管理"])
+        # ✨ 分頁修改：將「抽獎管理」拆分為「獎品設定」與「抽獎紀錄」
+        tab_remind, tab_points, tab_contact, tab1, tab2, tab_line, tab3, tab_money, tab_prize, tab_log = st.tabs(["📌 提醒", "🌟 點數與完美卡", "📖 聯絡簿", "📋 登記成績", "🎯 單生管理", "📲 LINE推播", "📝 新增作業", "💰 薪資", "🎁 獎品設定", "📜 抽獎紀錄"])
         
         with tab_remind:
             st.subheader("📌 提醒事項管理")
@@ -1207,7 +1204,8 @@ elif menu == "🛠️ 老師專屬後台":
                     st.session_state.has_unsaved = True
                     st.rerun()
 
-        with tab_lottery:
+        # ✨ 分拆：將原本的「抽獎管理」變成「獎品設定」
+        with tab_prize:
             st.subheader("🎁 抽獎系統設定")
             
             st.markdown("#### 🔒 抽獎大門開關")
@@ -1241,8 +1239,9 @@ elif menu == "🛠️ 老師專屬後台":
             else:
                 st.info("目前沒有設定任何獎品喔！如果學生現在抽獎，只會抽到「🍬 神秘小禮物」。")
 
-            st.divider()
-            st.write("#### 📜 學生抽獎紀錄追蹤")
+        # ✨ 分拆：全新的「抽獎紀錄」獨立分頁
+        with tab_log:
+            st.subheader("📜 學生抽獎紀錄追蹤")
             if st.session_state.lottery_df.empty:
                 st.info("目前還沒有學生進行過抽獎喔！")
             else:
